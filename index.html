@@ -25,7 +25,7 @@
             <div class="logo">
                 <!-- <a href="#">Abdel-Rahman</a>
                 <a href="#">Mahmoud</a> -->
-                <img src="images/portfolio/logo.png" style="display: flex; height: 32px; width: 32px;" alt="">
+                <img src="images/portfolio/logo.png" style="display: flex; height: 150px; width: 150px;" alt="">
             </div>
             <div class="nav-toggler">
                 <span></span>
@@ -456,7 +456,7 @@
                         <div class="contact-info-item padd-15">
                             <div class="icon"><i class="fa fa-phone"></i></div>
                             <h4>Call Us On</h4>
-                            <p>+201023686787</p>
+                            <a href="tel:+201023686787"><p>+201023686787</p></a>
                         </div>
                         <!-- Contact info item end  -->
                         <!-- Contact info item start  -->
@@ -470,14 +470,14 @@
                         <div class="contact-info-item padd-15">
                             <div class="icon"><i class="fa fa-envelope"></i></div>
                             <h4>Email</h4>
-                            <p>abdelrahmanmahmoudnasr<br>@gmail.com</p>
+                            <a href="mailto:abdelrahmanmahmoudnasr@gmail.com"><p>abdelrahmanmahmoudnasr<br>@gmail.com</p></a>
                         </div>
                         <!-- Contact info item end  -->
                         <!-- Contact info item start  -->
                         <div class="contact-info-item padd-15">
                             <div class="icon"><i class="fa fa-globe-europe"></i></div>
                             <h4>Website</h4>
-                            <p>abdelrahmanmahmoud<br>.000webhostapp.com/</p>
+                            <a href="https://abdelrahmanmahmoud262.github.io"><p>abdelrahmanmahmoud262<br>.github.io</p></a>
                         </div>
                         <!-- Contact info item end  -->
                     </div>
@@ -488,8 +488,7 @@
                     <div class="row">
                         <div class="contact-form padd-15">
 
-                            <form action="mailto:abdelrahmanmahmoudnasr@gmail.com" method="POST" enctype="text/plain"
-                                name="EmailForm" id="contact-form">
+                            <form name="EmailForm" id="contact-form">
 
 
                                 <div class="row">
@@ -524,7 +523,7 @@
 
                                 <div class="row">
                                     <div class="form-item col-12 padd-15">
-                                        <button type="submit" class="btn">Send Message</button>
+                                        <button type="submit" onclick="submitEmail()" class="btn">Send Message</button>
                                     </div>
                                 </div>
                             </form>

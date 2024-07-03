@@ -770,7 +770,7 @@ h3.my-profession {
 .contact .contact-info-item h4 {
     font-size: 18px;
     font-weight: 700;
-    color: var(text-black-900);
+    color: white;
     text-transform: capitalize;
     margin: 15px 0 5px;
 }

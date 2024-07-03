@@ -76,27 +76,42 @@ addItem("Battle Royale 4k Wallpaper", "Wallpaper Application with admin panel", 
 
 
 
-const form = document.getElementById('contact-form');
+// const form = document.getElementById('contact-form');
 
-form.addEventListener('submit', (event) => {
-    event.preventDefault();
+// form.addEventListener('submit', (event) => {
+//     event.preventDefault();
 
-    const subject = form.elements.subject.value;
-    const message = form.elements.message.value;
+//     const subject = form.elements.subject.value;
+//     const message = form.elements.message.value;
 
-    // Build the deep link
-    let deepLink = `mailto:abdelrahmanmahmoudnasr@gmail.com&subject=${subject}&body=${message}`;
+//     // Build the deep link
+//     let deepLink = `mailto:abdelrahmanmahmoudnasr@gmail.com&subject=${subject}&body=${message}`;
 
-    // Check if the device is Android or iOS
-    const platform = navigator.userAgent.toLowerCase();
-    if (/android/.test(platform)) {
-        deepLink = `intent://${deepLink}#Intent;scheme=mailto;package=com.google.android.gm;end`;
-    } else if (/iphone|ipad|ipod/.test(platform)) {
-        deepLink = `gmail://compose?subject=${subject}&body=${message}`;
-    }
+//     // Check if the device is Android or iOS
+//     const platform = navigator.userAgent.toLowerCase();
+//     if (/android/.test(platform)) {
+//         deepLink = `intent://${deepLink}#Intent;scheme=mailto;package=com.google.android.gm;end`;
+//     } else if (/iphone|ipad|ipod/.test(platform)) {
+//         deepLink = `gmail://compose?subject=${subject}&body=${message}`;
+//     }
 
-    // Open the deep link in a new window
-    window.open(deepLink, '_blank');
-});
+//     // Open the deep link in a new window
+//     window.open(deepLink, '_blank');
+// });
+
+function submitEmail() {
+    // Get form data
+    const name = document.getElementById('name').value;
+    const email = document.getElementById('email').value;
+    const subject = document.getElementById('subject').value;
+    const message = document.getElementById('message').value;
+
+    // Build the mailto link with user input
+    const mailtoLink = `mailto:abdelrahmanmahmoudnasr@gmail.com?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(message)}`;
+
+    // Open the mailto link in a new window
+    window.location.href = mailtoLink;
+}
+
 
 
