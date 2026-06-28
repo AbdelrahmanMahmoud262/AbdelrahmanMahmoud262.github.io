@@ -1,9 +1,9 @@
 import type { Metadata } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
-import Script from "next/script";
 import "./globals.css";
 import Navbar from "@/components/Navbar";
 import Footer from "@/components/Footer";
+import GoogleAnalytics from "@/components/GoogleAnalytics";
 
 const geistSans = Geist({
   variable: "--font-geist-sans",
@@ -72,23 +72,8 @@ export default function RootLayout({
       <body
         className={`${geistSans.variable} ${geistMono.variable} antialiased min-h-screen bg-background text-foreground flex flex-col relative`}
       >
-        {/* Google Analytics (Optional, only loaded if ID is provided) */}
-        {process.env.NEXT_PUBLIC_GA_ID && (
-          <>
-            <Script
-              src={`https://www.googletagmanager.com/gtag/js?id=${process.env.NEXT_PUBLIC_GA_ID}`}
-              strategy="afterInteractive"
-            />
-            <Script id="google-analytics" strategy="afterInteractive">
-              {`
-                window.dataLayer = window.dataLayer || [];
-                function gtag(){dataLayer.push(arguments);}
-                gtag('js', new Date());
-                gtag('config', '${process.env.NEXT_PUBLIC_GA_ID}');
-              `}
-            </Script>
-          </>
-        )}
+        {/* Google Analytics Tag & Client-side Route Tracking */}
+        <GoogleAnalytics />
 
         {/* Structural Blueprint Grids */}
         <div className="absolute inset-0 blueprint-grid opacity-60 pointer-events-none z-0"></div>
