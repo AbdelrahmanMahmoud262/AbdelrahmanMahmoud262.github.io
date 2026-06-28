@@ -20,7 +20,7 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
       changeFrequency = "weekly";
     } else if (p.slug === "services") {
       priority = 0.9;
-    } else if (p.slug === "case-studies" || p.slug === "blog") {
+    } else if (p.slug === "case-studies" || p.slug === "blog" || p.slug === "patterns") {
       priority = 0.8;
       changeFrequency = "weekly";
     } else if (p.slug === "about") {

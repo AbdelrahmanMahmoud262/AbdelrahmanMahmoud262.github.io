@@ -1,4 +1,5 @@
 import { SearchResult } from "./types";
+import { ARCHITECTURE_DECISIONS, ENGINEERING_PATTERNS } from "@/lib/knowledge/catalog";
 
 export const STATIC_SEARCH_INDEX: SearchResult[] = [
   {
@@ -102,40 +103,67 @@ export const STATIC_SEARCH_INDEX: SearchResult[] = [
   },
   {
     id: "article.schoolie-white-label-gradle-automation",
-    title: "Gradle Build Automation: Driving White-Label Deployments at Scale",
+    title: "Schoolie White-Label Architecture: 18 Variants From One Registry",
     url: "/blog/schoolie-white-label-gradle-automation/",
-    excerpt: "How we automated flavor dimensions, dynamically mapped assets, and structured Gradle dependencies for a multi-tenant school application.",
+    excerpt: "How clients.json generates Gradle flavors while runtime configuration resolves branding, themes, and feature policy.",
     category: "DevOps",
     type: "ARTICLE",
     score: 0
   },
   {
     id: "article.taxi-alwatani-clean-architecture-refactor",
-    title: "Clean Architecture Refactor: Restructuring a National Ride-Hailing Platform",
+    title: "Taxi Alwatani: Coordinating Ktor, Firestore, and Ride State",
     url: "/blog/taxi-alwatani-clean-architecture-refactor/",
-    excerpt: "A technical walkthrough of refactoring a monolithic taxi booking application into clean modular architectural boundaries.",
+    excerpt: "A source-level walkthrough of trip creation, competing dispatch signals, and active ride state in the passenger app.",
     category: "Architecture",
     type: "ARTICLE",
     score: 0
   },
   {
     id: "article.taxi-captain-realtime-tracking-websockets",
-    title: "Real-Time Tracking: Designing a Reliable Driver Location Broadcast Engine",
+    title: "Taxi Captain: Foreground Dispatch With Firestore, Room, and Ktor",
     url: "/blog/taxi-captain-realtime-tracking-websockets/",
-    excerpt: "A deep dive into managing persistent background WebSocket connections, location request intervals, and network state recovery.",
+    excerpt: "How driver assignment, trip caches, HTTP location uploads, and background overlays cooperate without WebSockets.",
     category: "Networking",
     type: "ARTICLE",
     score: 0
   },
   {
     id: "article.studentway-parent-offline-first-booking",
-    title: "Offline-First Sync: Local caching for Parent Booking Systems",
+    title: "StudentWay: Shared Caches, Optimistic Messages, and Live Tracking",
     url: "/blog/studentway-parent-offline-first-booking/",
-    excerpt: "Architecting zero-latency parent booking interfaces utilizing SQLite / Room databases and automated sync workers.",
+    excerpt: "A verified look at session-scoped student caching, Room Paging, Pusher message events, and Firebase trip tracking.",
     category: "Database",
     type: "ARTICLE",
     score: 0
-  }
+  },
+  {
+    id: "page.patterns",
+    title: "Architecture Pattern Catalog & ADRs",
+    url: "/patterns/",
+    excerpt: "Source-verified engineering patterns and decision records extracted across five Android codebases.",
+    category: "Knowledge Platform",
+    type: "PAGE",
+    score: 0
+  },
+  ...ENGINEERING_PATTERNS.map((pattern): SearchResult => ({
+    id: `pattern.${pattern.id}`,
+    title: pattern.title,
+    url: `/patterns/#${pattern.id}`,
+    excerpt: pattern.summary,
+    category: "Engineering Patterns",
+    type: "PATTERN",
+    score: 0
+  })),
+  ...ARCHITECTURE_DECISIONS.map((adr): SearchResult => ({
+    id: `adr.${adr.id}`,
+    title: `${adr.number}: ${adr.title}`,
+    url: `/patterns/#${adr.id}`,
+    excerpt: adr.decision,
+    category: "Architecture Decisions",
+    type: "ADR",
+    score: 0
+  }))
 ];
 export const defaultWeights = {
   title: 100,

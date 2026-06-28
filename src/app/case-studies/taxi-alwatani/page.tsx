@@ -12,12 +12,12 @@ import { tokens } from "@/lib/tokens";
 export const metadata: Metadata = createMetadata({
   title: "Taxi Alwatani — Android Architecture Case Study",
   description:
-    "How I led a full Clean Architecture refactor of Iraq's primary ride-hailing app (30,000+ active users) using Kotlin, Jetpack Compose, Ktor, Dagger Hilt, and Google Maps SDK — with zero production downtime.",
+    "A source-verified ride-hailing architecture using Kotlin, Jetpack Compose, Ktor, Koin, Firestore, and Google Maps SDK to coordinate passenger trip state.",
   keywords: [
     "ride-hailing app Android architecture",
     "Clean Architecture refactor Android",
     "Iraq Android app",
-    "Dagger Hilt migration",
+    "Koin Android architecture",
     "Jetpack Compose migration production",
   ],
   path: "/case-studies/taxi-alwatani",
@@ -104,7 +104,7 @@ export default function TaxiAlwataniCaseStudy() {
           <Cpu className="w-8 h-8 text-[#00e5ff] mx-auto animate-pulse" />
           <h4 className="text-sm font-bold text-white uppercase select-none">System Architecture & GPS Synchronization Flow</h4>
           <p className="text-xs text-zinc-500 max-w-md mx-auto leading-relaxed">
-            [System Diagram: Fused Location Provider polling intervals, Foreground Services routing updates, and Pusher WebSocket triggers connecting to the Almyaar ride dispatch servers.]
+            [System Diagram: Ktor trip creation, Firestore acceptance and status signals, backend fallback polling, and Compose map-state reduction.]
           </p>
         </div>
 

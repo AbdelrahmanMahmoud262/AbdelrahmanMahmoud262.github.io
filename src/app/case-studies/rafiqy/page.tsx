@@ -12,7 +12,7 @@ import { tokens } from "@/lib/tokens";
 export const metadata: Metadata = createMetadata({
   title: "Rafiqy Digital Wellness — Privacy-First Android Architecture Case Study",
   description:
-    "Building a 100% on-device app blocker using Android Accessibility Service, UsageStats API, and modular Clean Architecture with zero server-side user data storage. Published on Google Play.",
+    "Building a two-engine app blocker with Android Accessibility Service, UsageStats API, Room session tracking, and modular Clean Architecture.",
   keywords: [
     "Android wellness app architecture",
     "Android Accessibility Service case study",
@@ -68,7 +68,7 @@ export default function RafiqyCaseStudy() {
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-6 py-8 border-y border-zinc-800/80">
         <div className="bg-[#121214]/20 border border-zinc-800/80 rounded-md p-6">
           <span className="block text-[10px] font-mono text-zinc-500 uppercase select-none">Impact Metric</span>
-          <span className="text-sm font-bold text-white">100% On-Device / Private</span>
+          <span className="text-sm font-bold text-white">2 Detection Engines</span>
         </div>
         <div className="bg-[#121214]/20 border border-zinc-800/80 rounded-md p-6">
           <span className="block text-[10px] font-mono text-zinc-500 uppercase select-none">Core Service</span>

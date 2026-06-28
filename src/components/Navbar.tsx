@@ -12,6 +12,7 @@ const navLinks = [
   { href: "/", label: "Home" },
   { href: "/about", label: "About" },
   { href: "/case-studies", label: "Case Studies" },
+  { href: "/patterns", label: "Patterns" },
   { href: "/services", label: "Services" },
   { href: "/blog", label: "Blog" },
   { href: "/resume", label: "Resume" },
@@ -80,7 +81,7 @@ export default function Navbar() {
             </Link>
 
             {/* Desktop Nav Links & Search Trigger */}
-            <div className="hidden md:flex items-center gap-6 lg:gap-8">
+            <div className="hidden lg:flex items-center gap-4 xl:gap-6">
               {navLinks.map((link) => {
                 const isActive = pathname === link.href || (link.href !== "/" && pathname.startsWith(link.href));
                 return (
@@ -109,7 +110,7 @@ export default function Navbar() {
             </div>
 
             {/* Contact CTA */}
-            <div className="hidden md:flex items-center gap-4">
+            <div className="hidden xl:flex items-center gap-4">
               <Link
                 href={PERSONAL_INFO.linkedin}
                 target="_blank"
@@ -137,7 +138,7 @@ export default function Navbar() {
             </div>
 
             {/* Mobile Menu & Search Button */}
-            <div className="md:hidden flex items-center gap-4">
+            <div className="lg:hidden flex items-center gap-4">
               {/* Mobile Search Icon */}
               <button
                 onClick={() => setIsSearchOpen(true)}
@@ -160,7 +161,7 @@ export default function Navbar() {
 
         {/* Mobile Menu Open State */}
         {isOpen && (
-          <div className="md:hidden bg-[#09090b]/95 backdrop-blur-md border-b border-zinc-800/80 animate-fadeIn">
+          <div className="lg:hidden bg-[#09090b]/95 backdrop-blur-md border-b border-zinc-800/80 animate-fadeIn">
             <div className="px-2 pt-2 pb-4 flex flex-col gap-1 sm:px-3">
               {navLinks.map((link) => {
                 const isActive = pathname === link.href || (link.href !== "/" && pathname.startsWith(link.href));

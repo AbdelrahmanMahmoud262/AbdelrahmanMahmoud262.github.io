@@ -40,11 +40,11 @@ export const TECHNOLOGIES: Entity[] = [
     slug: "ktor",
     seo: {
       description: "Asynchronous HTTP client and server framework built in Kotlin using Coroutines.",
-      keywords: ["Ktor", "HTTP Client", "Kotlin Ktor", "WebSockets client"]
+      keywords: ["Ktor", "HTTP Client", "Kotlin Ktor", "Mobile networking"]
     },
     presentation: {
       category: "Networking",
-      tags: ["Async", "HTTP Client", "WebSockets", "Serialization"],
+      tags: ["Async", "HTTP Client", "Serialization"],
       technologies: ["ktor", "kotlin"]
     },
     relationships: []

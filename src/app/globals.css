@@ -38,6 +38,29 @@ pre, code {
   font-family: var(--font-geist-mono), ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
 }
 
+/* Keep technical content inside the reading column on narrow screens. */
+.prose pre {
+  max-width: 100%;
+  overflow-x: auto;
+}
+
+.prose pre code {
+  display: block;
+  min-width: 100%;
+  width: max-content;
+}
+
+.prose :not(pre) > code {
+  overflow-wrap: anywhere;
+  word-break: break-word;
+}
+
+.prose table {
+  display: block;
+  max-width: 100%;
+  overflow-x: auto;
+}
+
 /* Custom Scrollbar */
 ::-webkit-scrollbar {
   width: 8px;
@@ -160,5 +183,4 @@ pre, code {
     text-decoration: underline !important;
   }
 }
-
 

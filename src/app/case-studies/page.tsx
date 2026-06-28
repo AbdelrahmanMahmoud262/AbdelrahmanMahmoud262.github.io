@@ -8,7 +8,7 @@ import { createMetadata } from "@/lib/seo/metadata";
 export const metadata: Metadata = createMetadata({
   title: "Technical Case Studies — Production Android Projects",
   description:
-    "In-depth case studies of production Android projects: Taxi Alwatani ride-hailing platform (30K+ users, Iraq), Schoolie white-label education app (40+ institutions), and Rafiqy digital wellness platform.",
+    "In-depth case studies of production Android projects: Taxi Alwatani ride state, Schoolie's 18 configured client variants, and Rafiqy's two-engine blocking architecture.",
   keywords: [
     "Android case studies",
     "Android portfolio projects",

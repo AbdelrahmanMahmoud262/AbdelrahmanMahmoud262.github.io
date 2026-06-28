@@ -4,6 +4,7 @@ import { TOPICS } from "./topics";
 import { RelationshipEngine } from "./relationshipEngine";
 import { getAllPosts } from "@/lib/content/blog";
 import { CASE_STUDIES } from "@/constants";
+import { ARCHITECTURE_DECISIONS, ENGINEERING_PATTERNS } from "@/lib/knowledge/catalog";
 
 let graphCache: Entity[] | null = null;
 
@@ -24,6 +25,7 @@ export const KnowledgeGraph = {
       { id: "page.case-studies", type: "PAGE", title: "Case Studies", slug: "case-studies", url: "/case-studies/", tags: [], relationships: [] },
       { id: "page.services", type: "PAGE", title: "Services", slug: "services", url: "/services/", tags: [], relationships: [] },
       { id: "page.blog", type: "PAGE", title: "Blog & Publication", slug: "blog", url: "/blog/", tags: [], relationships: [] },
+      { id: "page.patterns", type: "PAGE", title: "Pattern Catalog & ADRs", slug: "patterns", url: "/patterns/", tags: ["Architecture", "ADRs"], relationships: [] },
       { id: "page.resume", type: "PAGE", title: "Resume", slug: "resume", url: "/resume/", tags: [], relationships: [] },
       { id: "page.contact", type: "PAGE", title: "Contact", slug: "contact", url: "/contact/", tags: [], relationships: [] },
       { id: "page.privacy", type: "PAGE", title: "Privacy Policy", slug: "privacy", url: "/privacy/", tags: [], relationships: [] }
@@ -85,7 +87,51 @@ export const KnowledgeGraph = {
     }));
     entities.push(...articles);
 
-    // 5. Dynamic Relationship Inference Engine (Bidirectional Mapping)
+    // 5. Add verified cross-project patterns and decision records
+    const patterns: Entity[] = ENGINEERING_PATTERNS.map(pattern => ({
+      id: `pattern.${pattern.id}`,
+      type: "PATTERN",
+      title: pattern.title,
+      slug: pattern.id,
+      url: `/patterns/#${pattern.id}`,
+      tags: pattern.projects,
+      seo: {
+        description: pattern.summary,
+        keywords: [pattern.title, ...pattern.projects]
+      },
+      presentation: {
+        category: "Engineering Patterns",
+        tags: pattern.projects,
+        technologies: []
+      },
+      relationships: []
+    }));
+    entities.push(...patterns);
+
+    const decisions: Entity[] = ARCHITECTURE_DECISIONS.map(adr => ({
+      id: `adr.${adr.id}`,
+      type: "ADR",
+      title: `${adr.number}: ${adr.title}`,
+      slug: adr.id,
+      url: `/patterns/#${adr.id}`,
+      tags: [adr.status, ...adr.projects],
+      seo: {
+        description: adr.decision,
+        keywords: [adr.number, "Architecture Decision Record", ...adr.projects]
+      },
+      presentation: {
+        category: "Architecture Decisions",
+        tags: [adr.status, adr.confidence],
+        technologies: []
+      },
+      relationships: adr.patternIds.map(patternId => ({
+        type: "RELATED_TO" as RelationshipType,
+        targetId: `pattern.${patternId}`
+      }))
+    }));
+    entities.push(...decisions);
+
+    // 6. Dynamic Relationship Inference Engine (Bidirectional Mapping)
     entities.forEach(source => {
       // Analyze references to technologies & topics
       const sourceTechs = (source.presentation?.technologies || []).map(t => t.toLowerCase());
@@ -116,7 +162,7 @@ export const KnowledgeGraph = {
       });
     });
 
-    // 6. Graph Validation (Gives build safety)
+    // 7. Graph Validation (Gives build safety)
     this.validate(entities);
 
     graphCache = entities;

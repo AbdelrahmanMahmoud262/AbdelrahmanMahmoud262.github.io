@@ -23,6 +23,7 @@ type FilteredItem =
 const POPULAR_TOPICS = [
   "Jetpack Compose",
   "Clean Architecture",
+  "Architecture Decisions",
   "Offline-First Data Sync",
   "Ktor",
   "Coroutines"

@@ -1,259 +1,115 @@
 ---
-title: "Refactoring Taxi Alwatani: An Incremental Clean Architecture Migration under 30K+ Live Users"
-description: "How we migrated Iraq's leading ride-hailing app — with 30,000+ active users — to Jetpack Compose, Ktor, and Dagger Hilt using an incremental layer-by-layer strategy that allowed continued production feature delivery throughout the entire refactor."
+title: "Taxi Alwatani: Coordinating Ktor, Firestore, and Ride State"
+description: "A source-level analysis of the passenger app's trip creation, three-signal driver search, Firestore status stream, and active-ride UI state machine."
 date: "2026-04-18"
 lastModified: "2026-06-28"
-category: "Leadership"
+category: "Architecture"
 tags:
-  - "Clean Architecture"
-  - "Jetpack Compose"
-  - "Dagger Hilt"
   - "Ktor"
-  - "Android"
-  - "Kotlin"
-  - "Team Lead"
-  - "Refactoring"
-  - "MVVM"
-readTime: "11 min read"
+  - "Firestore"
+  - "Jetpack Compose"
+  - "State Machine"
+  - "Koin"
+  - "Google Maps"
+readTime: "8 min read"
 featured: false
+experienceLevel: "Expert"
+version: "Verified against source: 2026-06-28"
+technologies:
+  - "Kotlin"
+  - "Jetpack Compose"
+  - "Ktor"
+  - "Coroutines"
 author:
   name: "Abdelrahman Nasr"
   role: "Senior Android Developer & Team Lead"
   url: "https://abdelrahmanmahmoud262.github.io/about"
 relatedArticles:
   - "taxi-captain-realtime-tracking-websockets"
-  - "mostaqeem-blocking-service-architecture"
+  - "studentway-parent-offline-first-booking"
 relatedProjects:
   - "taxi-alwatani"
 seo:
   keywords:
-    - "Clean Architecture Android refactoring"
-    - "Jetpack Compose migration strategy"
-    - "Android architecture migration production"
-    - "Dagger Hilt migration tutorial"
-    - "Android team lead architecture"
-    - "ride-hailing app architecture Android"
-    - "incremental refactoring Android"
+    - "Android ride hailing architecture"
+    - "Firestore trip state Kotlin"
+    - "Ktor Android taxi app"
+    - "Compose ride state machine"
+    - "Android dispatch fallback polling"
 ---
 
-## Summary
+## Verification Scope
 
-Refactoring a live production application is one of the most high-stakes engineering challenges. The wrong approach — a hard rewrite — freezes feature delivery, accumulates divergence risk, and often results in a product that never ships. Taxi Alwatani, Iraq's primary ride-hailing platform serving 30,000+ active users, needed a complete architectural overhaul from a legacy structure to Clean Architecture, Jetpack Compose, and modern dependency injection — while maintaining uninterrupted production releases throughout the entire process.
+The repository verifies a three-module app/domain/data architecture and the current ride flow. It cannot establish a historical refactor timeline, deployment process, or user-impact metrics, so those claims are outside this article.
 
-This article documents the exact incremental strategy we used, the architectural boundaries we established, and the lessons learned leading a team of three Android developers through a full production refactor.
+## One Ride, Two Transports
 
----
+The passenger app uses Ktor for commands and full payloads, while Firestore carries fast-changing dispatch state.
 
-## Context: The Legacy Architecture
+- Ktor creates trips, fetches trip details, loads cancellation reasons, submits status-changing commands, and resolves routes.
+- Firestore observes driver acceptance, dispatch termination, driver status, and driver coordinates.
 
-The legacy Taxi Alwatani passenger app had several structural problems:
+This is a deliberate division of data shape. REST responses remain the authoritative domain payload; Firestore documents act as small realtime signals.
 
-- **Monolithic ViewModels** — Each ViewModel contained networking, business logic, and UI state management as a flat, unseparated blob
-- **Static managers** — Singletons accessed directly from Activities and Fragments with no abstraction layer
-- **XML layouts** — Mixed Compose/XML attempts with no coherent migration path
-- **No DI framework** — Manual dependency construction with no lifecycle awareness
-- **No unit tests** — Business logic was untestable because it was coupled directly to Android framework classes
+## Trip Creation Before Dispatch
 
-The effect was a slow, fragile release cycle. Any change in one area had unpredictable ripple effects across the codebase.
+`TripFlowViewModel` owns a multi-step Compose flow: pickup, destination, category, and searching. `TripFlowStatePersister` saves the current step, `TripParameters`, and optional trip ID in `SavedStateHandle`.
 
----
+`CreateTripUseCase` validates location, address, payment, wallet balance, vehicle class, duration, and distance before calling `TripRepository.createTrip()`.
 
-## The Strategy: Layer-by-Layer Migration
+After a successful POST, it emits `TripCreated` and begins observing search resolution.
 
-We adopted a strict rule: **do not rewrite horizontally** (i.e., do not migrate one entire screen at a time). Instead, migrate **vertically by layer** — data layer first, domain layer second, presentation layer last.
+## Three Signals Race to Resolve Search
 
-This approach allowed every layer change to be independently shippable, testable, and rollbackable without affecting the other layers.
+`ObserveTripSearchUseCase` merges three sources and applies `take(1)`:
 
-### Phase 1: Establish Domain Contracts
+1. A Firestore query against `Drivers` where `tripId` matches. `tripAccepted == true` means acceptance.
+2. A Firestore listener on `Trips/{tripId}`. A nonzero `Ended` field means the search ended without a driver.
+3. An HTTP call to `current-trip-status` every 30 seconds. Backend code 6 also means the search ended.
 
-Before touching any networking or UI code, we defined clean domain contracts as Kotlin interfaces. These interfaces became the single source of truth for what each repository can do — with zero knowledge of how data is fetched or stored:
-
-```kotlin
-// domain/repository/RideRepository.kt
-interface RideRepository {
-    fun getActiveRides(): Flow<Result<List<Ride>>>
-    fun getRideHistory(): Flow<Result<List<RideRecord>>>
-    suspend fun requestRide(pickup: Location, dropoff: Location): Result<Unit>
-    suspend fun cancelRide(rideId: String): Result<Unit>
-}
-
-// domain/repository/DriverRepository.kt
-interface DriverRepository {
-    fun getNearbyDrivers(location: Location, radiusKm: Double): Flow<Result<List<Driver>>>
-    fun observeAssignedDriver(rideId: String): Flow<Driver?>
-}
+```mermaid
+flowchart TD
+    Created[Trip created] --> Merge{First terminal signal}
+    Drivers[Firestore Drivers: tripAccepted] --> Merge
+    TripDoc[Firestore Trips/id: Ended] --> Merge
+    Poll[HTTP status every 30s] --> Merge
+    Merge -->|Accepted| Active[Active trip]
+    Merge -->|Ended| Rejected[No driver found]
 ```
 
-These domain interfaces exist in a pure Kotlin module (`:domain`) with zero Android dependencies. They can be unit tested with plain JUnit without a device or emulator.
+The HTTP poll is not the primary realtime transport. It is an independent fallback that can terminate a search if a Firestore update is missed.
 
-### Phase 2: Implement Data Layer with Ktor + Hilt
+## Active Ride State
 
-With contracts defined, we replaced the legacy networking layer with **Ktor** for HTTP and WebSocket handling. Ktor was chosen over Retrofit because:
+`GetTripDetailsAndObserveStatusUseCase` fetches complete trip details over Ktor, then observes the assigned driver's Firestore document. It maps integer status values into:
 
-1. It handles both HTTP and WebSocket with a unified client
-2. It's Kotlin-first with native coroutine support
-3. It's significantly lighter than Retrofit + OkHttp for our use case
+- Pending
+- OnTheWay
+- Arrived
+- Started
+- ClientPaid
+- TripEnd
+- Canceled
+- Failed
 
-```kotlin
-// data/remote/RideRemoteDataSource.kt
-class RideRemoteDataSourceImpl @Inject constructor(
-    private val httpClient: HttpClient
-) : RideRemoteDataSource {
+`ActiveTripViewModel` reduces each status into markers, camera behavior, cancellation policy, and navigation. It recalculates driver-to-pickup directions while the driver is on the way, then driver-to-destination directions after the ride starts.
 
-    override suspend fun requestRide(
-        pickup: Location,
-        dropoff: Location
-    ): RideResponse {
-        return httpClient.post("rides/request") {
-            contentType(ContentType.Application.Json)
-            setBody(RideRequestDto(
-                pickupLat = pickup.latitude,
-                pickupLng = pickup.longitude,
-                dropoffLat = dropoff.latitude,
-                dropoffLng = dropoff.longitude,
-            ))
-        }.body()
-    }
-}
-```
+## Location Collection
 
-Repository implementations map DTOs to domain models, keeping the domain layer free of network concerns:
+The passenger's own `LocationRepositoryImpl` wraps `FusedLocationProviderClient` in `callbackFlow`, requests high-accuracy updates at a 10-second interval, and removes the callback in `awaitClose`. Missing permission and disabled location services are explicit exceptions rather than empty coordinates.
 
-```kotlin
-class RideRepositoryImpl @Inject constructor(
-    private val remoteDataSource: RideRemoteDataSource,
-    private val localDataSource: RideLocalDataSource, // Room
-) : RideRepository {
+## The Dormant Room Boundary
 
-    override fun getActiveRides(): Flow<Result<List<Ride>>> =
-        localDataSource.observeActiveRides()
-            .map { entities -> Result.success(entities.map(RideEntity::toDomain)) }
-            .catch { emit(Result.failure(it)) }
-}
-```
+The data module declares `ActiveTripEntity`, `ActiveTripDao`, and a Room database. Koin constructs the database, but no production flow injects or calls that DAO.
 
-### Phase 3: Migrate to Jetpack Compose
+That distinction is important: the schema suggests intended recovery, but the current ride flow is not Room-backed. Active recovery comes from backend `hasActiveTrip()`, Firestore, and restored navigation state.
 
-With the data and domain layers isolated and tested, we began the UI migration. The key principle was **hybrid interoperability** — Compose and XML can coexist in the same Activity. This allowed us to migrate one screen at a time without freezing delivery of new features.
+## Failure Modes Worth Keeping Visible
 
-```kotlin
-// Old: XML-based fragment
-class RideStatusFragment : Fragment(R.layout.fragment_ride_status)
+1. When Firestore omits driver coordinates, the repository substitutes `Location(31.5, 32.65)`. A missing coordinate can therefore appear as a real map position.
+2. Two overloaded trip creation methods still throw `TODO("Not yet implemented")`; the full route overload is the implemented path.
+3. The active-trip database uses destructive migration and is currently unused.
+4. The release build uses the debug signing configuration.
 
-// New: Compose screen collected from a clean ViewModel
-@Composable
-fun RideStatusScreen(viewModel: RideViewModel = hiltViewModel()) {
-    val uiState by viewModel.uiState.collectAsStateWithLifecycle()
+The reusable pattern is the three-signal resolution strategy. Realtime streams are fast, backend polling is independent, and the domain use case decides one terminal result before the UI sees it.
 
-    when (uiState) {
-        is RideUiState.Loading -> LoadingScreen()
-        is RideUiState.Active -> ActiveRideMap(uiState.ride)
-        is RideUiState.Completed -> RideCompletedCard(uiState.record)
-        is RideUiState.Error -> ErrorScreen(uiState.message)
-    }
-}
-```
-
-State is modeled as sealed classes, making every screen state explicit and exhaustive:
-
-```kotlin
-sealed class RideUiState {
-    data object Loading : RideUiState()
-    data class Active(val ride: Ride, val driver: Driver?) : RideUiState()
-    data class Completed(val record: RideRecord) : RideUiState()
-    data class Error(val message: String) : RideUiState()
-}
-```
-
-This eliminates the classic `isLoading`, `errorMessage`, `data` triple-nullable state problem that plagues legacy ViewModels.
-
----
-
-## Dependency Injection: Dagger Hilt Migration
-
-Migrating from manual dependency construction to Dagger Hilt was done module by module. The trick is to keep both the old and new DI approaches alive during migration and switch screens individually.
-
-```kotlin
-@HiltAndroidApp
-class TaxiAlwataniApp : Application()
-
-// Each module declares its bindings
-@Module
-@InstallIn(SingletonComponent::class)
-abstract class RepositoryModule {
-
-    @Binds
-    abstract fun bindRideRepository(impl: RideRepositoryImpl): RideRepository
-
-    @Binds
-    abstract fun bindDriverRepository(impl: DriverRepositoryImpl): DriverRepository
-}
-```
-
-The strict separation between `@Singleton`, `@ActivityScoped`, and `@ViewModelScoped` components resolved several memory leaks that were previously silently occurring — ViewModels were holding Context references that outlived their Activity.
-
----
-
-## Unit Testing: Domain Layer First
-
-One of the primary motivations for Clean Architecture is testability. Once the domain layer was isolated in a pure Kotlin module, writing unit tests became straightforward:
-
-```kotlin
-// domain/usecase/RequestRideUseCaseTest.kt
-class RequestRideUseCaseTest {
-
-    private val rideRepository: RideRepository = mockk()
-    private val useCase = RequestRideUseCase(rideRepository)
-
-    @Test
-    fun `requestRide returns success when repository succeeds`() = runTest {
-        val pickup = Location(lat = 33.3, lng = 44.4)
-        val dropoff = Location(lat = 33.5, lng = 44.6)
-
-        coEvery { rideRepository.requestRide(pickup, dropoff) } returns Result.success(Unit)
-
-        val result = useCase(pickup, dropoff)
-        assertThat(result.isSuccess).isTrue()
-    }
-}
-```
-
-We established unit test coverage for all use cases in the domain layer within the first month. This became the safety net that made the rest of the refactor possible — any regression in business logic was caught before it could reach production.
-
----
-
-## Leading the Team Through the Refactor
-
-As Team Lead, the architectural refactor also required a team process refactor. Key decisions:
-
-**Code review gates**: Every PR touching the domain or data layer required architectural review, not just logic review. We used PR templates with checklist items: "Does this change expose Android dependencies to the domain layer? Is this testable?"
-
-**Feature-flag new screens**: New Compose screens were hidden behind a `BuildConfig` feature flag until they passed QA, allowing CI/CD to continue shipping the XML version to production.
-
-**Architecture Decision Records (ADRs)**: Every significant decision (Ktor vs. Retrofit, Hilt vs. Koin) was documented in a lightweight ADR markdown file in the repository. This gave new team members context and prevented revisiting decided debates.
-
----
-
-## Results
-
-- Full production refactor completed and submitted for Ministry of Transportation approval
-- Domain layer: 100% unit test coverage for all use cases
-- Location tracking stability improved significantly on weak 3G/4G connections
-- Release cycle reduced from 2-week cycles to 1-week sprints
-- Team of 3 developers shipping with zero architectural regressions after process changes
-
----
-
-## FAQ
-
-**Q: How long did the full refactor take?**
-The data and domain layers were migrated in approximately 8 weeks. The full Compose UI migration is ongoing, with screens migrated incrementally alongside new feature delivery.
-
-**Q: What's the risk of running Compose and XML in the same app?**
-Minimal if you follow the interoperability guidelines. The main risk is inconsistent state management if you mix Fragment ViewModels with Compose ViewModels. We enforced that all state lives in `hiltViewModel()` regardless of whether the host is XML or Compose.
-
-**Q: Why Ktor over Retrofit?**
-Taxi Alwatani uses WebSockets extensively for real-time dispatch. Ktor handles both HTTP and WebSocket through a unified `HttpClient`, which simplified our networking layer significantly. Retrofit would have required a separate WebSocket library (OkHttp WebSocket), creating two network abstraction layers.
-
-**Q: How did you avoid disrupting the product team during the refactor?**
-By maintaining two parallel implementations behind feature flags and strictly never deleting legacy code until the new implementation was fully tested and QA-approved. The product team continued receiving weekly feature releases throughout the entire refactor.

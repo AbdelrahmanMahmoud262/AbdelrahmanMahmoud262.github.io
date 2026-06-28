@@ -12,13 +12,13 @@ import { tokens } from "@/lib/tokens";
 export const metadata: Metadata = createMetadata({
   title: "Schoolie White-Label — Android Architecture Case Study",
   description:
-    "How I migrated 60% of a Java/XML codebase to Kotlin/Compose and automated 40+ white-label school app variants with a single Gradle CI/CD pipeline — serving Egypt, UAE, and KSA.",
+    "A source-verified white-label Android architecture that generates 18 client variants from JSON and resolves branding, themes, and feature policy at runtime.",
   keywords: [
     "Android white-label case study",
     "Gradle build automation Android",
     "Kotlin migration Android",
     "white-label school app",
-    "Android CI/CD automation",
+    "Android product flavor registry",
   ],
   path: "/case-studies/schoolie",
   ogImage: "/og/case-study-schoolie.png",
@@ -68,19 +68,19 @@ export default function SchoolieCaseStudy() {
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-6 py-8 border-y border-zinc-800/80">
         <div className="bg-[#121214]/20 border border-zinc-800/80 rounded-md p-6">
           <span className="block text-[10px] font-mono text-zinc-500 uppercase select-none">Impact Metric</span>
-          <span className="text-xl font-bold text-white">{project.metricValue} Institutions</span>
+          <span className="text-xl font-bold text-white">{project.metricValue} {project.metricLabel}</span>
         </div>
         <div className="bg-[#121214]/20 border border-zinc-800/80 rounded-md p-6">
-          <span className="block text-[10px] font-mono text-zinc-500 uppercase select-none">Automation</span>
-          <span className="text-sm font-bold text-[#00e5ff]">CI/CD Build Overlays</span>
+          <span className="block text-[10px] font-mono text-zinc-500 uppercase select-none">Build Model</span>
+          <span className="text-sm font-bold text-[#00e5ff]">JSON Flavor Registry</span>
         </div>
         <div className="bg-[#121214]/20 border border-zinc-800/80 rounded-md p-6">
           <span className="block text-[10px] font-mono text-zinc-500 uppercase select-none">Architecture</span>
           <span className="text-sm font-bold text-white">Clean / Koin Annotations</span>
         </div>
         <div className="bg-[#121214]/20 border border-zinc-800/80 rounded-md p-6">
-          <span className="block text-[10px] font-mono text-zinc-500 uppercase select-none">Sync Pipeline</span>
-          <span className="text-sm font-bold text-white">WebSockets / Offline Cache</span>
+          <span className="block text-[10px] font-mono text-zinc-500 uppercase select-none">Background Work</span>
+          <span className="text-sm font-bold text-white">Room / WorkManager</span>
         </div>
       </div>
 
@@ -104,7 +104,7 @@ export default function SchoolieCaseStudy() {
           <Layers className="w-8 h-8 text-[#00e5ff] mx-auto animate-pulse" />
           <h4 className="text-sm font-bold text-white uppercase select-none">White-Label Build Flavor & Gradle Directory Mapping</h4>
           <p className="text-xs text-zinc-500 max-w-md mx-auto leading-relaxed">
-            [System Diagram: Gradle build flavor dimension hierarchy, overlaying assets from school-specific resource directories over main resources, and automated CI/CD distribution paths.]
+            [System Diagram: clients.json, generated Gradle flavors, BuildConfig identity, and runtime branding/theme/feature resolution.]
           </p>
         </div>
 

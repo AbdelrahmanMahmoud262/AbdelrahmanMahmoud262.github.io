@@ -39,6 +39,14 @@ export class NavigationCommandProvider implements CommandProvider {
         iconName: "Cpu"
       },
       {
+        id: "nav.patterns",
+        title: "Go to Pattern Catalog & ADRs",
+        category: "Navigation",
+        action: () => this.router.push("/patterns/"),
+        shortcut: "G P",
+        iconName: "Network"
+      },
+      {
         id: "nav.blog",
         title: "Go to Blog Page",
         category: "Navigation",

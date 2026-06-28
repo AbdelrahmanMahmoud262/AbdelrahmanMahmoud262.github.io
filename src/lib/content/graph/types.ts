@@ -4,6 +4,8 @@ export type EntityType =
   | "PROJECT" 
   | "TECHNOLOGY" 
   | "TOPIC" 
+  | "PATTERN"
+  | "ADR"
   | "COMMAND" 
   | "PAGE";
 

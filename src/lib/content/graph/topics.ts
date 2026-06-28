@@ -36,15 +36,15 @@ export const TOPICS: Entity[] = [
   {
     id: "topic.real-time",
     type: "TOPIC",
-    title: "Real-Time Systems & WebSockets",
-    slug: "real-time-websockets",
+    title: "Real-Time Mobile Systems",
+    slug: "real-time-systems",
     seo: {
-      description: "Managing live background location dispatch, tracking network states, and streaming events via WebSockets.",
-      keywords: ["WebSockets Android", "Real-time dispatch", "Location tracking", "Kotlin Flow channels"]
+      description: "Managing live location, dispatch state, and event streams across Firestore, Firebase RTDB, Pusher, and HTTP.",
+      keywords: ["Real-time Android", "Firestore dispatch", "Location tracking", "Kotlin Flow channels"]
     },
     presentation: {
       category: "Real-Time Interactivity",
-      tags: ["WebSockets", "Data Streaming", "Active connection management", "Ktor Client"],
+      tags: ["Firestore", "Firebase RTDB", "Pusher", "Data Streaming", "Ktor Client"],
       technologies: ["ktor", "coroutines"]
     },
     relationships: []
