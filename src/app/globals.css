@@ -1,26 +1,164 @@
 @import "tailwindcss";
 
 :root {
-  --background: #ffffff;
-  --foreground: #171717;
+  --background: #000000;      /* Void-black base */
+  --foreground: #ffffff;      /* High-contrast white */
+  --card-bg: #0a0a0a;         /* Dark charcoal surface container */
+  --card-border: #262626;     /* 1px structural border definition */
+  --accent-android: #00e5ff;  /* Electric Cyan accent */
+  --accent-gold: #f59e0b;     /* Amber/Gold */
+  
+  --font-geist-sans: var(--font-geist-sans);
+  --font-geist-mono: var(--font-geist-mono);
 }
 
-@theme inline {
+@theme {
   --color-background: var(--background);
   --color-foreground: var(--foreground);
-  --font-sans: var(--font-geist-sans);
-  --font-mono: var(--font-geist-mono);
+  --color-card-bg: var(--card-bg);
+  --color-card-border: var(--card-border);
+  --color-accent-android: var(--accent-android);
+  --color-accent-gold: var(--accent-gold);
 }
 
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
-  }
+* {
+  box-sizing: border-box;
 }
 
 body {
-  background: var(--background);
+  background-color: var(--background);
   color: var(--foreground);
-  font-family: Arial, Helvetica, sans-serif;
+  font-family: var(--font-geist-sans), ui-sans-serif, system-ui, sans-serif;
+  overflow-x: hidden;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
 }
+
+pre, code {
+  font-family: var(--font-geist-mono), ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+}
+
+/* Custom Scrollbar */
+::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+
+::-webkit-scrollbar-track {
+  background: #030712;
+}
+
+::-webkit-scrollbar-thumb {
+  background: #1f2937;
+  border-radius: 4px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: #374151;
+}
+
+/* Glassmorphism utility */
+.glass {
+  background: rgba(11, 15, 25, 0.7);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  border: 1px solid rgba(255, 255, 255, 0.05);
+}
+
+/* Custom glow animations */
+@keyframes pulseGlow {
+  0%, 100% {
+    opacity: 0.15;
+  }
+  50% {
+    opacity: 0.3;
+  }
+}
+
+.glow-bg {
+  position: absolute;
+  border-radius: 50%;
+  filter: blur(80px);
+  z-index: 0;
+  pointer-events: none;
+  animation: pulseGlow 10s ease-in-out infinite;
+}
+
+.glow-android {
+  background: var(--accent-android);
+}
+
+.glow-gold {
+  background: var(--accent-gold);
+}
+
+/* Structural Blueprint Grids (High-Craft Industrial Minimalist) */
+.blueprint-grid {
+  background-size: 40px 40px;
+  background-image: 
+    linear-gradient(to right, rgba(63, 63, 70, 0.08) 1px, transparent 1px),
+    linear-gradient(to bottom, rgba(63, 63, 70, 0.08) 1px, transparent 1px);
+}
+
+.blueprint-dots {
+  background-size: 20px 20px;
+  background-image: radial-gradient(rgba(63, 63, 70, 0.12) 1px, transparent 1px);
+}
+
+/* Subtle organic noise overlay for tactile feel */
+.noise-overlay {
+  background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 200 200' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noiseFilter'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.8' numOctaves='3' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noiseFilter)' opacity='0.015'/%3E%3C/svg%3E");
+}
+
+/* Custom premium card borders and diagnostic metrics indicators */
+.diagnostic-line {
+  background: repeating-linear-gradient(
+    90deg,
+    var(--accent-android) 0px,
+    var(--accent-android) 8px,
+    transparent 8px,
+    transparent 16px
+  );
+}
+
+/* @media print stylesheet for high-quality resume PDF export */
+@media print {
+  body, html, main, #__next {
+    background: #ffffff !important;
+    color: #000000 !important;
+  }
+
+  nav, footer, .print\:hidden, [class*="Navbar"], [class*="Footer"], .h-16 {
+    display: none !important;
+  }
+
+  /* Clear background card fills, blurs, and borders in print */
+  .glass, [class*="bg-gray-"], [class*="border-gray-"], [class*="bg-zinc-"], [class*="border-zinc-"] {
+    background: transparent !important;
+    background-color: transparent !important;
+    border-color: transparent !important;
+    box-shadow: none !important;
+    backdrop-filter: none !important;
+    -webkit-backdrop-filter: none !important;
+  }
+
+  /* Reset outer main layout width and padding for paper bounds */
+  .w-full.max-w-4xl, .w-full.max-w-6xl {
+    padding: 0 !important;
+    margin: 0 !important;
+    width: 100% !important;
+    max-width: 100% !important;
+  }
+
+  /* Force print text to black */
+  h1, h2, h3, h4, h5, h6, p, span, li, a {
+    color: #000000 !important;
+    text-shadow: none !important;
+  }
+
+  a {
+    text-decoration: underline !important;
+  }
+}
+
+
