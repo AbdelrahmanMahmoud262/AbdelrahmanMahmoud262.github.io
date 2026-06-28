@@ -1,5 +1,6 @@
 import React from "react";
 import Link from "next/link";
+import type { Metadata } from "next";
 import {
   ArrowRight,
   Smartphone,
@@ -17,7 +18,23 @@ import {
   BLOG_POSTS,
   TECHNICAL_SKILLS,
 } from "@/constants";
+import { createMetadata } from "@/lib/seo/metadata";
 import InteractiveTerminal from "@/components/InteractiveTerminal";
+
+export const metadata: Metadata = createMetadata({
+  title: "Abdelrahman Nasr | Senior Android Architect & Team Lead",
+  description:
+    "Senior Android Developer and Team Lead specializing in Kotlin, Jetpack Compose, Clean Architecture, and high-performance background engines. Based in Cairo, Egypt. Available for remote consulting worldwide.",
+  keywords: [
+    "Senior Android Developer Egypt",
+    "Android Team Lead Cairo",
+    "Jetpack Compose Consultant",
+    "Clean Architecture Android Expert",
+    "Remote Mobile Architect Middle East",
+  ],
+  path: "",
+  ogImage: "/og/home.png",
+});
 
 export default function Home() {
   return (
@@ -370,7 +387,7 @@ export default function Home() {
           {BLOG_POSTS.slice(0, 1).map((post) => (
             <Link
               key={post.slug}
-              href={`/blog#${post.slug}`}
+              href={`/blog/${post.slug}/`}
               className="lg:col-span-8 bg-[#121214]/30 border border-zinc-800/80 rounded-md p-8 flex flex-col justify-between gap-6 hover:border-zinc-700 transition-all duration-300 relative group cursor-pointer"
             >
               <div className="absolute top-0 right-0 px-3 py-1 bg-[#00e5ff]/15 text-[#00e5ff] text-[9px] font-mono uppercase tracking-widest rounded-bl select-none">
@@ -401,7 +418,7 @@ export default function Home() {
             {BLOG_POSTS.slice(1, 3).map((post) => (
               <Link
                 key={post.slug}
-                href={`/blog#${post.slug}`}
+                href={`/blog/${post.slug}/`}
                 className="bg-[#121214]/20 border border-zinc-800/80 rounded-md p-6 flex flex-col justify-between gap-4 hover:border-zinc-700 transition-all duration-300 cursor-pointer block"
               >
                 <div className="flex flex-col gap-2">

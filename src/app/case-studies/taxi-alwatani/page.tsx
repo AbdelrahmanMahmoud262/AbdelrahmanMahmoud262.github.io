@@ -1,22 +1,51 @@
 import React from "react";
 import Link from "next/link";
+import type { Metadata } from "next";
 import { ArrowLeft, Cpu } from "lucide-react";
 import { CASE_STUDIES } from "@/constants";
+import { createMetadata } from "@/lib/seo/metadata";
+import { JsonLd } from "@/components/JsonLd";
+import { breadcrumbSchema, softwareApplicationSchema } from "@/lib/seo/jsonld";
+import { Breadcrumbs } from "@/components/seo/Breadcrumbs";
+import { tokens } from "@/lib/tokens";
+
+export const metadata: Metadata = createMetadata({
+  title: "Taxi Alwatani — Android Architecture Case Study",
+  description:
+    "How I led a full Clean Architecture refactor of Iraq's primary ride-hailing app (30,000+ active users) using Kotlin, Jetpack Compose, Ktor, Dagger Hilt, and Google Maps SDK — with zero production downtime.",
+  keywords: [
+    "ride-hailing app Android architecture",
+    "Clean Architecture refactor Android",
+    "Iraq Android app",
+    "Dagger Hilt migration",
+    "Jetpack Compose migration production",
+  ],
+  path: "/case-studies/taxi-alwatani",
+  ogImage: "/og/case-study-taxi-alwatani.png",
+});
 
 export default function TaxiAlwataniCaseStudy() {
   const project = CASE_STUDIES.find((c) => c.id === "taxi-alwatani")!;
 
   return (
     <div className="w-full max-w-5xl mx-auto px-4 sm:px-6 lg:px-8 py-24 md:py-32 flex flex-col gap-12 animate-fadeIn">
-      {/* Back button */}
-      <Link
-        href="/case-studies"
-        className="inline-flex items-center gap-1.5 self-start text-xs font-mono text-zinc-400 hover:text-white transition-colors border border-zinc-800 rounded px-4 py-2 bg-[#121214]/60 cursor-pointer"
-      >
-        <ArrowLeft className="w-3.5 h-3.5" />
-        <span>Back to Case Studies</span>
-      </Link>
+      <JsonLd data={softwareApplicationSchema({ name: project.title, description: project.tagline, url: `${tokens.site.url}/case-studies/taxi-alwatani/` })} />
+      <JsonLd data={breadcrumbSchema([{ name: "Home", url: `${tokens.site.url}/` }, { name: "Case Studies", url: `${tokens.site.url}/case-studies/` }, { name: project.title, url: `${tokens.site.url}/case-studies/taxi-alwatani/` }])} />
 
+      {/* Back button */}
+      <div className="flex flex-col gap-4">
+        <Link
+          href="/case-studies"
+          className="inline-flex items-center gap-1.5 self-start text-xs font-mono text-zinc-400 hover:text-white transition-colors border border-zinc-800 rounded px-4 py-2 bg-[#121214]/60 cursor-pointer"
+        >
+          <ArrowLeft className="w-3.5 h-3.5" />
+          <span>Back to Case Studies</span>
+        </Link>
+        <Breadcrumbs items={[
+          { name: "Case Studies", url: "/case-studies/" },
+          { name: project.title, url: `/case-studies/taxi-alwatani/` }
+        ]} />
+      </div>
       {/* Header */}
       <div className="flex flex-col gap-4">
         <div className="flex items-center gap-2 text-xs font-mono select-none">

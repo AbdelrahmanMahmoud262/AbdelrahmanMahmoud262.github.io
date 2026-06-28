@@ -1,0 +1,280 @@
+---
+title: "Gradle Build Flavor Overlays: Scaling SAGA/Schoolie to 40+ School App Variants"
+description: "Eliminating git branch hell: how to automate asset replacement, localized modules, and white-label configurations dynamically via JSON in a single Android codebase — scaling Schoolie to 40+ school variants without manual packaging overhead."
+date: "2026-05-10"
+lastModified: "2026-06-28"
+category: "Architecture"
+tags:
+  - "Gradle"
+  - "White-Label"
+  - "Build Automation"
+  - "Android"
+  - "Koin"
+  - "CI/CD"
+  - "Multi-Module"
+  - "Kotlin"
+readTime: "10 min read"
+featured: false
+author:
+  name: "Abdelrahman Nasr"
+  role: "Senior Android Developer & Team Lead"
+  url: "https://abdelrahmanmahmoud262.github.io/about"
+relatedArticles:
+  - "taxi-alwatani-clean-architecture-refactor"
+  - "studentway-parent-offline-first-booking"
+relatedProjects:
+  - "schoolie"
+seo:
+  keywords:
+    - "Android white label app architecture"
+    - "Gradle build flavors tutorial"
+    - "Android product flavors multiple brands"
+    - "white label Android app Kotlin"
+    - "Gradle convention plugins"
+    - "Android CI/CD multiple variants"
+    - "Schoolie architecture Android"
+---
+
+## Summary
+
+Maintaining separate git branches for each branded app variant is a scaling anti-pattern that collapses under its own weight at around 5–10 clients. Merge conflicts multiply. Release coordination becomes a full-time job. CI/CD breaks differently for each branch. The correct engineering solution — and what we implemented for SAGA/Schoolie — is a **single codebase with Gradle product flavor automation** that generates all 40+ branded variants from one clean repository, with a `git tag` triggering CI to build and distribute every client's APK/AAB automatically.
+
+This article walks through the exact architecture.
+
+---
+
+## The Problem: Manual Branching at Scale
+
+Before the refactor, Schoolie had a fragmented codebase:
+
+- Each school had its own feature branch with hardcoded colors, logos, and app names
+- A release required manually checking out each branch, building, and uploading to Play Store
+- Adding a new school meant copying a branch and hand-editing `strings.xml`, `colors.xml`, and `AndroidManifest.xml`
+- WebSocket messaging worked on some branches but not others, because fixes weren't merged consistently
+
+At 40+ schools, this approach was consuming several developer-hours per release. The refactor goal was to reduce that to a single `git push origin tag`.
+
+---
+
+## Architecture: Build Logic Modules & Convention Plugins
+
+To prevent bloating the main `build.gradle.kts`, we implemented custom **Gradle convention plugins** in a `build-logic/convention/` composite build module. This is the same pattern used by the Now in Android reference project.
+
+Each convention plugin encapsulates reusable build configuration:
+
+```kotlin
+// build-logic/convention/src/main/kotlin/AndroidApplicationPlugin.kt
+class AndroidApplicationPlugin : Plugin<Project> {
+    override fun apply(target: Project) {
+        with(target) {
+            with(pluginManager) {
+                apply("com.android.application")
+                apply("org.jetbrains.kotlin.android")
+            }
+            extensions.configure<ApplicationExtension> {
+                configureKotlinAndroid(this)
+                defaultConfig.targetSdk = 35
+            }
+        }
+    }
+}
+```
+
+The app module's `build.gradle.kts` then reads from a clean client descriptor JSON:
+
+```kotlin
+android {
+    flavorDimensions.add("brand")
+
+    // Load all school configs from clients/clients.json
+    val clientsJson = File(rootDir, "clients/clients.json")
+    val clients = gson.fromJson(clientsJson.readText(), ClientsConfig::class.java)
+
+    clients.schools.forEach { school ->
+        productFlavors.create(school.flavorName) {
+            dimension = "brand"
+            applicationId = school.applicationId
+            versionNameSuffix = "-${school.flavorName}"
+            manifestPlaceholders["appName"] = school.displayName
+            manifestPlaceholders["appIcon"] = "@mipmap/${school.iconName}"
+            resValue("string", "school_id", school.schoolId)
+            resValue("string", "api_base_url", school.apiBaseUrl)
+        }
+    }
+}
+```
+
+The `clients.json` descriptor:
+
+```json
+{
+  "schools": [
+    {
+      "flavorName": "schoolA",
+      "displayName": "Cairo International School",
+      "applicationId": "com.schoolie.cairoInternational",
+      "schoolId": "cairo-intl-001",
+      "apiBaseUrl": "https://api.schoolie.app",
+      "iconName": "ic_launcher_cairo_intl"
+    },
+    {
+      "flavorName": "schoolB",
+      "displayName": "Emirates Education Academy",
+      "applicationId": "com.schoolie.emirates",
+      "schoolId": "emirates-edu-002",
+      "apiBaseUrl": "https://api.schoolie.app",
+      "iconName": "ic_launcher_emirates"
+    }
+  ]
+}
+```
+
+Adding a new school is now a single JSON entry. The Gradle script handles the rest.
+
+---
+
+## Resource Overlays & Theme Directories
+
+Android's **asset merger** resolves resource directories in priority order. Flavor-specific resources in `src/schoolA/res/` automatically override the defaults in `src/main/res/` at build time:
+
+```
+app/src/
+  main/
+    res/
+      values/colors.xml    ← Default cyan theme
+      mipmap/ic_launcher/  ← Default Schoolie icon
+  schoolA/
+    res/
+      values/colors.xml    ← Cairo Intl brand colors (overrides main)
+      mipmap/ic_launcher/  ← Cairo Intl logo (overrides main)
+  schoolB/
+    res/
+      values/colors.xml    ← Emirates brand colors
+```
+
+This means zero duplicated layout code. The Compose UI, screens, and navigation are all shared from `src/main/`. Only the visual identity assets differ per flavor.
+
+For dynamic theme values (primary color, surface color), we use `resValue()` in the Gradle config to inject per-flavor color values that Compose can read via `colorResource()`.
+
+---
+
+## Dependency Injection & Convention Modularization
+
+We use **Koin 4.2.0 with KSP annotations** to manage dependencies across modules. Each feature module declares its own Koin module:
+
+```kotlin
+// feature/feed/src/main/kotlin/di/FeedModule.kt
+@Module
+@ComponentScan("com.schoolie.feed")
+class FeedModule
+
+@Single
+class FeedRepositoryImpl(
+    private val api: KtorClient,
+    private val db: FeedDatabase,
+) : FeedRepository
+```
+
+School-specific Koin modules are conditionally included based on the build flavor via a `BuildConfig` flag:
+
+```kotlin
+// In Application.kt
+startKoin {
+    androidContext(this@App)
+    modules(
+        coreModule,
+        feedModule,
+        messagingModule,
+        if (BuildConfig.ENABLE_BUS_TRACKING) busTrackingModule else emptyModule,
+    )
+}
+```
+
+This allows some schools (with bus tracking hardware) to include the full GPS tracking feature while others get a stripped variant — all from the same codebase.
+
+---
+
+## CI/CD: One Tag, 40+ APKs
+
+The CI/CD pipeline uses GitHub Actions with a matrix strategy to build each flavor in parallel. A release is triggered by a `git tag`:
+
+```yaml
+# .github/workflows/release.yml
+on:
+  push:
+    tags: ['v*']
+
+jobs:
+  build-variants:
+    strategy:
+      matrix:
+        flavor: [schoolA, schoolB, schoolC] # Auto-generated from clients.json
+    steps:
+      - uses: actions/checkout@v4
+      - name: Build Release APK
+        run: ./gradlew assemble${{ matrix.flavor }}Release
+      - name: Upload to Play Store
+        uses: r0adkll/upload-google-play@v1
+        with:
+          serviceAccountJsonPlainText: ${{ secrets.SERVICE_ACCOUNT_JSON }}
+          packageName: com.schoolie.${{ matrix.flavor }}
+          track: internal
+          releaseFiles: app/build/outputs/apk/${{ matrix.flavor }}/release/*.apk
+```
+
+What previously took hours of manual work now completes in a parallel CI run — every school gets their branded APK signed and uploaded to their Play Store track automatically.
+
+---
+
+## Offline-First Messaging with WebSockets
+
+A key fix in the refactor was the broken messaging pipeline. The legacy system used HTTP polling, which produced message delays of 2–8 seconds and frequent missed notifications. We replaced it with a persistent WebSocket connection:
+
+```kotlin
+class MessagingRepository(private val httpClient: HttpClient) {
+
+    fun observeMessages(channelId: String): Flow<Message> = flow {
+        httpClient.webSocket(
+            host = BuildConfig.WS_HOST,
+            path = "/channels/$channelId"
+        ) {
+            for (frame in incoming) {
+                if (frame is Frame.Text) {
+                    val message = json.decodeFromString<Message>(frame.readText())
+                    emit(message)
+                }
+            }
+        }
+    }.retry(3) { cause ->
+        cause is IOException // Reconnect on network errors
+    }
+}
+```
+
+The WebSocket connection is managed by the Room-backed `offline-first` layer: incoming messages are written to the local database first, and the UI observes the database (not the network). This means messages are never lost even if the WebSocket connection drops momentarily.
+
+---
+
+## Results
+
+- **Release time**: From ~4 hours of manual work per release → single `git push origin tag`
+- **Codebase branches**: From 40+ active branches → 1 main branch
+- **New school onboarding**: From ~2 hours → 30 minutes (write JSON, add assets, CI runs)
+- **WebSocket messaging**: From 2–8 second delays → sub-100ms delivery
+- **Codebase health**: 60% migrated from Java/XML to Kotlin/Compose in 7 months with zero live disruptions
+
+---
+
+## FAQ
+
+**Q: How do you handle schools with different feature sets (e.g., bus tracking vs. no bus tracking)?**
+Via `BuildConfig` flags injected in the flavor configuration. Koin modules are conditionally included at startup based on these flags.
+
+**Q: What happens if a school's `clients.json` entry is invalid?**
+The Gradle script validates the JSON against a schema during the configuration phase and fails fast with a descriptive error before any compilation starts.
+
+**Q: How do you manage signing certificates for 40+ apps?**
+All variants share a single release keystore. Individual schools are differentiated by `applicationId` only — they are different apps on the Play Store, but signed by the same key.
+
+**Q: Can this architecture support schools with different backend URLs?**
+Yes. The `apiBaseUrl` field in `clients.json` is injected as a `BuildConfig.API_BASE_URL` string and consumed by the Ktor client configuration.

@@ -1,0 +1,305 @@
+---
+title: "High-Frequency Background GPS Tracking and WebSockets Dispatch in Taxi Alwatani Captain App"
+description: "Engineering a production-grade location tracking and real-time dispatch system for ride-hailing driver apps: Foreground Service GPS streaming, WebSocket bidirectional communication, and battery optimization strategies for high-frequency location updates in challenging network environments."
+date: "2026-03-22"
+lastModified: "2026-06-28"
+category: "Android"
+tags:
+  - "Foreground Service"
+  - "GPS Tracking"
+  - "WebSockets"
+  - "Kotlin"
+  - "Fused Location Provider"
+  - "Real-Time Systems"
+  - "Android"
+  - "Coroutines"
+readTime: "9 min read"
+featured: false
+author:
+  name: "Abdelrahman Nasr"
+  role: "Senior Android Developer & Team Lead"
+  url: "https://abdelrahmanmahmoud262.github.io/about"
+relatedArticles:
+  - "taxi-alwatani-clean-architecture-refactor"
+  - "mostaqeem-blocking-service-architecture"
+relatedProjects:
+  - "taxi-alwatani"
+seo:
+  keywords:
+    - "Android GPS tracking foreground service"
+    - "WebSocket Android Kotlin tutorial"
+    - "real-time location tracking Android"
+    - "Fused Location Provider tutorial"
+    - "ride-hailing captain app architecture"
+    - "Android background location tracking"
+    - "WebSocket bidirectional Android Ktor"
+---
+
+## Summary
+
+Driver/captain applications in ride-hailing platforms have fundamentally different technical requirements than passenger apps. While passengers need location data updated every few seconds, driver apps must stream their position continuously with sub-second frequency to enable precise passenger matching, route calculation, and arrival time estimates. Simultaneously, the server must push real-time dispatch events (new ride requests, cancellations, surge pricing) instantly to active drivers. This article breaks down the exact architecture used in the Taxi Alwatani Captain application.
+
+---
+
+## The Core Challenge: Two-Way Real-Time Communication
+
+A naive implementation uses two separate systems: HTTP polling for dispatch events, and a background service for GPS uploads. This creates multiple problems:
+
+- HTTP polling introduces 2–10 second delays for dispatch events — unacceptable when a passenger is waiting
+- Running two separate background systems doubles battery consumption
+- Reconnection logic must be implemented and maintained in two places
+
+The correct solution is a **single persistent WebSocket connection** that handles both directions simultaneously: GPS coordinates streamed upward, dispatch events received downward.
+
+---
+
+## GPS Tracking: Resilient Foreground Service
+
+Android's OS will kill background processes under memory pressure. To prevent this, the location tracker runs inside a **Foreground Service** — a service that displays a persistent notification, signaling to the OS that it should not be killed.
+
+```kotlin
+@AndroidEntryPoint
+class LocationTrackingService : LifecycleService() {
+
+    @Inject lateinit var locationRepository: LocationRepository
+    @Inject lateinit var dispatchRepository: DispatchRepository
+
+    override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
+        super.onStartCommand(intent, flags, startId)
+        startForeground(NOTIFICATION_ID, buildTrackingNotification())
+        startTracking()
+        return START_STICKY // Restart if killed by OS
+    }
+
+    private fun startTracking() {
+        lifecycleScope.launch {
+            locationRepository
+                .observeLocation()
+                .combine(dispatchRepository.observeDispatchEvents()) { location, event ->
+                    Pair(location, event)
+                }
+                .collect { (location, event) ->
+                    // Handle both GPS updates and dispatch events in one stream
+                    location?.let { sendLocationToServer(it) }
+                    event?.let { handleDispatchEvent(it) }
+                }
+        }
+    }
+}
+```
+
+The `START_STICKY` flag ensures the service is automatically restarted if the OS kills it under extreme memory pressure.
+
+---
+
+## Fused Location Provider Configuration
+
+The **Fused Location Provider** (FLP) is Android's recommended API for GPS tracking. It intelligently fuses GPS, Wi-Fi, and cell tower signals to minimize battery consumption while maintaining accuracy.
+
+Configuration is critical — too aggressive intervals drain battery; too infrequent intervals make the driver's position appear to jump on the passenger's map:
+
+```kotlin
+class LocationRepositoryImpl @Inject constructor(
+    private val fusedLocationProviderClient: FusedLocationProviderClient,
+) : LocationRepository {
+
+    override fun observeLocation(): Flow<Location?> = callbackFlow {
+        val locationRequest = LocationRequest.Builder(
+            Priority.PRIORITY_HIGH_ACCURACY,
+            LOCATION_UPDATE_INTERVAL_MS    // 2000ms — every 2 seconds
+        ).apply {
+            setMinUpdateIntervalMillis(FASTEST_LOCATION_INTERVAL_MS) // 1000ms minimum
+            setMinUpdateDistanceMeters(MIN_DISTANCE_CHANGE_METERS)   // 5 meters minimum
+            setGranularity(Granularity.GRANULARITY_FINE)
+        }.build()
+
+        val callback = object : LocationCallback() {
+            override fun onLocationResult(result: LocationResult) {
+                result.lastLocation?.let { trySend(it) }
+            }
+        }
+
+        fusedLocationProviderClient.requestLocationUpdates(
+            locationRequest,
+            callback,
+            Looper.getMainLooper()
+        )
+
+        awaitClose {
+            fusedLocationProviderClient.removeLocationUpdates(callback)
+        }
+    }
+
+    companion object {
+        const val LOCATION_UPDATE_INTERVAL_MS = 2_000L
+        const val FASTEST_LOCATION_INTERVAL_MS = 1_000L
+        const val MIN_DISTANCE_CHANGE_METERS = 5f
+    }
+}
+```
+
+The `setMinUpdateDistanceMeters(5f)` is a key optimization — it suppresses location callbacks when the driver hasn't moved at least 5 meters. This dramatically reduces updates when the driver is stopped at a traffic light, preserving battery without degrading the passenger's experience (a stationary position is still accurate).
+
+---
+
+## WebSocket Bidirectional Pipeline
+
+Location data is streamed upward, and dispatch events arrive downward through the same WebSocket connection. Ktor's WebSocket client handles this naturally with coroutine structured concurrency:
+
+```kotlin
+class DispatchRepositoryImpl @Inject constructor(
+    private val httpClient: HttpClient,
+    private val authRepository: AuthRepository,
+) : DispatchRepository {
+
+    override suspend fun connectAndStreamGPS(
+        driverId: String,
+        gpsFlow: Flow<Location>
+    ): Flow<DispatchEvent> = channelFlow {
+
+        httpClient.webSocket(
+            host = BuildConfig.DISPATCH_WS_HOST,
+            path = "/drivers/$driverId/connect",
+            request = {
+                header("Authorization", "Bearer ${authRepository.getToken()}")
+            }
+        ) {
+            // Upstream: Send GPS coordinates
+            val gpsJob = launch {
+                gpsFlow.collect { location ->
+                    val payload = LocationPayload(
+                        lat = location.latitude,
+                        lng = location.longitude,
+                        accuracy = location.accuracy,
+                        timestamp = location.time,
+                    )
+                    send(Frame.Text(json.encodeToString(payload)))
+                }
+            }
+
+            // Downstream: Receive dispatch events
+            for (frame in incoming) {
+                if (frame is Frame.Text) {
+                    val event = json.decodeFromString<DispatchEvent>(frame.readText())
+                    send(event) // Emit to the channelFlow collector
+                }
+            }
+
+            gpsJob.cancel()
+        }
+    }.retryWhen { cause, attempt ->
+        // Reconnect on network errors with exponential backoff
+        if (cause is IOException || cause is WebSocketException) {
+            delay(minOf(1_000L * 2.0.pow(attempt.toInt()).toLong(), 30_000L))
+            true
+        } else {
+            false
+        }
+    }
+}
+```
+
+The `retryWhen` operator handles disconnections gracefully. In the Middle East where 3G/4G connectivity is inconsistent, automatic reconnection with exponential backoff is essential — the driver should never need to manually restart the app after a network blip.
+
+---
+
+## Battery Optimization Strategy
+
+Running GPS + WebSocket continuously at high frequency is inherently battery-intensive. We applied several strategies to minimize the impact:
+
+### Adaptive Intervals Based on Driver Status
+
+```kotlin
+val locationRequest = when (driverStatus) {
+    DriverStatus.Available -> LocationRequest.Builder(Priority.PRIORITY_HIGH_ACCURACY, 2_000).build()
+    DriverStatus.OnRide -> LocationRequest.Builder(Priority.PRIORITY_HIGH_ACCURACY, 1_000).build()
+    DriverStatus.Offline -> null // Stop tracking entirely
+}
+```
+
+When the driver is offline, tracking stops completely. When on a ride, we increase frequency to 1 second for better passenger ETA accuracy.
+
+### Thread Isolation
+
+All GPS and WebSocket processing runs on `Dispatchers.IO`, never touching the main thread:
+
+```kotlin
+lifecycleScope.launch(Dispatchers.IO) {
+    connectAndStreamGPS(driverId, locationFlow).collect { event ->
+        withContext(Dispatchers.Main) {
+            handleDispatchEvent(event)
+        }
+    }
+}
+```
+
+Main-thread scheduling is only done for UI updates — the GPS processing loop never blocks the rendering pipeline.
+
+### WakeLock Management
+
+The Foreground Service acquires a `PARTIAL_WAKE_LOCK` to keep the CPU active during location tracking, but we release it immediately when the driver goes offline:
+
+```kotlin
+private val wakeLock by lazy {
+    (getSystemService(POWER_SERVICE) as PowerManager)
+        .newWakeLock(PowerManager.PARTIAL_WAKE_LOCK, "TaxiAlwatani::LocationTracking")
+}
+
+fun startTracking() { wakeLock.acquire(MAX_TRACKING_DURATION_MS) }
+fun stopTracking() { if (wakeLock.isHeld) wakeLock.release() }
+```
+
+---
+
+## Dispatch Event Handling
+
+When a ride request arrives from the dispatch server, the service needs to surface it to the UI immediately — even if the app is in the background:
+
+```kotlin
+private fun handleDispatchEvent(event: DispatchEvent) {
+    when (event) {
+        is DispatchEvent.RideRequest -> {
+            // Update local database (Room)
+            rideDatabase.pendingRides().insert(event.toEntity())
+            // Show heads-up notification
+            notificationManager.showRideRequest(event)
+            // Send broadcast to active UI
+            sendBroadcast(Intent(ACTION_RIDE_REQUEST).apply {
+                putExtra(EXTRA_RIDE_ID, event.rideId)
+            })
+        }
+        is DispatchEvent.RideCancelled -> {
+            rideDatabase.pendingRides().deleteById(event.rideId)
+            notificationManager.cancelRideNotification(event.rideId)
+        }
+        is DispatchEvent.SurgePriceUpdate -> {
+            surgeRepository.updateMultiplier(event.area, event.multiplier)
+        }
+    }
+}
+```
+
+---
+
+## Results
+
+- Sub-1 second GPS update frequency during active rides
+- WebSocket dispatch event delivery under 100ms (vs. 2–10 seconds with HTTP polling)
+- Zero crashes from uncancelled coroutines due to `LifecycleService` lifecycle binding
+- Adaptive tracking reduces battery consumption by ~40% during idle periods compared to the fixed-interval legacy implementation
+
+---
+
+## FAQ
+
+**Q: Why not use Firebase Realtime Database or Firestore for dispatch events?**
+Firebase adds significant SDK overhead and introduces vendor lock-in. A direct WebSocket connection over Ktor gives us full control over the protocol, reconnection logic, and payload format with zero third-party dependency.
+
+**Q: How do you handle the case where the driver's phone loses connectivity during an active ride?**
+The `retryWhen` reconnection logic handles temporary disconnections. The last known GPS position is cached in Room and uploaded in a batch when connectivity is restored. The passenger's ETA estimate pauses updating but doesn't crash.
+
+**Q: Does this work on Doze mode?**
+Yes. Foreground Services are explicitly exempted from Doze mode restrictions. The persistent notification is the signal to the OS that this is intentional foreground work.
+
+**Q: What's the `MAX_TRACKING_DURATION_MS` value for the WakeLock?**
+4 hours. This is a safety ceiling — if a driver forgets to go offline, the WakeLock releases automatically after 4 hours to prevent infinite battery drain.

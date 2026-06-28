@@ -1,7 +1,23 @@
 import React from "react";
+import type { Metadata } from "next";
 import ContactForm from "@/components/ContactForm";
 import { Mail, Phone, Clock, ShieldCheck, MapPin } from "lucide-react";
 import { PERSONAL_INFO } from "@/constants";
+import { createMetadata } from "@/lib/seo/metadata";
+
+export const metadata: Metadata = createMetadata({
+  title: "Contact — Hire Android Architect",
+  description:
+    "Contact Abdelrahman Nasr for Android consulting, architecture audits, Jetpack Compose migrations, or team lead engagements. Based in Cairo, Egypt. Available remotely worldwide. GMT+1 to GMT+4.",
+  keywords: [
+    "hire Android developer Egypt",
+    "Android consulting contact",
+    "Android architect for hire",
+    "remote Android developer contact",
+  ],
+  path: "/contact",
+  ogImage: "/og/contact.png",
+});
 
 export default function Contact() {
   return (

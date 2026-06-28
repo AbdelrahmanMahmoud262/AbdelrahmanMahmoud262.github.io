@@ -1,7 +1,27 @@
 import React from "react";
 import Link from "next/link";
+import type { Metadata } from "next";
 import { Smartphone, GitBranch, RefreshCw, Zap, Layers, Users, ArrowRight, ShieldCheck, Mail } from "lucide-react";
 import { SERVICES } from "@/constants";
+import { createMetadata } from "@/lib/seo/metadata";
+import { JsonLd } from "@/components/JsonLd";
+import { faqSchema } from "@/lib/seo/jsonld";
+
+export const metadata: Metadata = createMetadata({
+  title: "Android Consulting Services",
+  description:
+    "Senior Android development, architecture audits, Jetpack Compose migration, performance optimization, and white-label build automation. Remote consulting worldwide from Cairo, Egypt.",
+  keywords: [
+    "Android consulting services",
+    "Android architecture audit",
+    "Jetpack Compose migration service",
+    "Android performance optimization",
+    "white-label Android automation",
+    "Android technical consulting Egypt",
+  ],
+  path: "/services",
+  ogImage: "/og/services.png",
+});
 
 const FAQS = [
   {
@@ -25,6 +45,7 @@ const FAQS = [
 export default function Services() {
   return (
     <div className="w-full max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-24 md:py-32 flex flex-col gap-24">
+      <JsonLd data={faqSchema(FAQS)} />
       {/* Header */}
       <div className="flex flex-col gap-4 max-w-3xl">
         <p className="text-xs font-mono text-accent-android uppercase tracking-wider font-extrabold select-none">

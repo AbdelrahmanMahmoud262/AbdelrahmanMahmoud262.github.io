@@ -1,0 +1,274 @@
+---
+title: "Deep Dive: Architecting a Low-Latency Foreground App Blocker & Session Tracker in Mostaqeem"
+description: "A comprehensive architectural analysis of how Mostaqeem (now Rafiqy) achieves real-time app blocking and session tracking on Android using LifecycleService, UsageStats API, Coroutine Flow pipelines, and Android Accessibility Service — with zero battery penalty."
+date: "2026-06-28"
+lastModified: "2026-06-28"
+category: "Android"
+tags:
+  - "Kotlin"
+  - "Foreground Service"
+  - "UsageStats API"
+  - "Android Accessibility Service"
+  - "Clean Architecture"
+  - "Coroutines"
+  - "LifecycleService"
+  - "App Blocking"
+readTime: "12 min read"
+featured: true
+author:
+  name: "Abdelrahman Nasr"
+  role: "Senior Android Developer & Team Lead"
+  url: "https://abdelrahmanmahmoud262.github.io/about"
+relatedArticles:
+  - "taxi-captain-realtime-tracking-websockets"
+  - "taxi-alwatani-clean-architecture-refactor"
+relatedProjects:
+  - "rafiqy"
+seo:
+  keywords:
+    - "Android app blocker architecture"
+    - "Foreground Service Android Kotlin"
+    - "UsageStats API Android tutorial"
+    - "Android session tracker implementation"
+    - "Android Accessibility Service performance"
+    - "LifecycleService Kotlin coroutines"
+    - "digital wellness app Android"
+---
+
+## Summary
+
+Building a robust app blocker and screen-time tracker on Android is one of the most technically demanding challenges in the ecosystem. Strict OEM battery management, OS restrictions on background operations, and the deprecation of traditional APIs force developers to combine multiple system APIs creatively. In **Mostaqeem** (now published as **Rafiqy**), we architected a system that polls the active foreground application every 300ms, tracks user session boundaries, and intercepts usage via a system overlay — achieving all of this with a battery footprint low enough to avoid triggering Android's battery optimization restrictions.
+
+This article is a detailed engineering breakdown of every architectural decision made.
+
+---
+
+## The Problem: Real-Time App Monitoring Without Battery Drain
+
+Most app blockers solve detection by querying `UsageStatsManager.queryUsageStats()` periodically. The problem is that this API was designed for coarse, infrequent queries (hourly, daily), not for real-time polling every 300ms. Calling it that frequently causes significant battery drain and `StrictMode` violations on several OEM skins (MIUI, ColorOS, OneUI).
+
+There are three realistic technical approaches to real-time foreground app detection:
+
+| Approach | Accuracy | Battery Impact | API Level |
+|----------|----------|---------------|-----------|
+| `queryUsageStats()` polling | Low (1s granularity) | High | API 21+ |
+| `UsageEvents` query | High (event-level) | Medium | API 21+ |
+| Accessibility Service node inspection | Exact (per-screen) | Low (trigger-based) | API 16+ |
+
+Mostaqeem uses a **two-engine architecture**: `UsageEvents` for macro-level app switching (which app is foreground), and the Accessibility Service only for micro-level content interception (which specific screen within the app is active, e.g., YouTube Shorts vs. a regular video).
+
+---
+
+## The Architecture: LifecycleService & Coroutine Flow Pipeline
+
+At the core is `com.mostaqeem.service.main.Service`, a Hilt-injected `LifecycleService`. By extending `LifecycleService` instead of the base `Service` class, we gain access to a `lifecycleScope` that automatically cancels all coroutines when the service is destroyed — eliminating the risk of coroutine leaks on service termination:
+
+```kotlin
+@AndroidEntryPoint
+class AppMonitorService : LifecycleService() {
+
+    @Inject lateinit var sessionTrackingManager: SessionTrackingManager
+    @Inject lateinit var foregroundDetector: AppForegroundRepository
+
+    override fun onCreate() {
+        super.onCreate()
+        startForegroundWithNotification()
+        registerUserPresentReceiver()
+        sessionTrackingManager.startTracking(lifecycleScope)
+        startAppsCollection()
+    }
+
+    private fun startAppsCollection() {
+        lifecycleScope.launch {
+            foregroundDetector
+                .observeForegroundPackage()
+                .distinctUntilChanged()
+                .collect { packageName ->
+                    handlePackageChange(packageName)
+                }
+        }
+    }
+}
+```
+
+The `distinctUntilChanged()` operator is critical here — it ensures we only react when the foreground package *actually changes*, not on every 300ms tick. This transforms a high-frequency polling loop into an event-driven stream.
+
+---
+
+## Deep Dive: Low-Latency Polling via AppForegroundRepository
+
+`AppForegroundRepositoryImpl` is the core detection engine. It exposes a `Flow<String?>` that emits the current foreground package name every 300ms.
+
+Standard `UsageStatsManager.queryUsageStats()` is slow and resource-heavy for sub-second polling. Instead, we use `UsageEvents`, which records discrete UI state transitions. We query only the last 2000ms of events and find the most recent `MOVE_TO_FOREGROUND` transition:
+
+```kotlin
+private fun resolveForegroundPackage(): String? {
+    if (!PermissionChecker.checkUsageAccessPermission(context)) return null
+
+    val endTime = System.currentTimeMillis()
+    val startTime = endTime - EVENT_LOOKBACK_MS // 2000ms window
+
+    val events = usageStatsManager.queryEvents(startTime, endTime)
+    val event = UsageEvents.Event()
+
+    var latestPackage: String? = null
+    var latestTimestamp = 0L
+
+    while (events.hasNextEvent()) {
+        events.getNextEvent(event)
+        // Only care about foreground transitions
+        if (!event.isForegroundTransition()) continue
+        if (event.timeStamp >= latestTimestamp) {
+            latestTimestamp = event.timeStamp
+            latestPackage = event.packageName
+        }
+    }
+
+    // Fallback: if UsageEvents returns empty (some OEM restrictions),
+    // fall back to daily UsageStats sorted by lastTimeUsed
+    return latestPackage ?: resolveForegroundFromUsageStats(endTime)
+}
+```
+
+This fallback is essential for reliability across different OEM implementations. The entire polling loop is dispatched off the main thread:
+
+```kotlin
+fun observeForegroundPackage(): Flow<String?> = flow {
+    while (currentCoroutineContext().isActive) {
+        emit(resolveForegroundPackage())
+        delay(POLLING_INTERVAL_MS) // 300ms
+    }
+}.flowOn(ioDispatcher) // Off main thread
+```
+
+The `flowOn(ioDispatcher)` ensures zero main-thread contention. Even if the `queryEvents` call takes 50ms on a slow device, the UI thread is never touched.
+
+---
+
+## Session Tracking & Screen Interception
+
+When the active package changes, `SessionTrackingManager` coordinates two actions:
+
+1. **Close the previous session** — dispatches an `APP_CLOSED` event with duration to the Room database
+2. **Evaluate the new package** — checks against the block list via `EvaluateBlockingStateUseCase`
+
+```kotlin
+private suspend fun onPackageChanged(newPackage: String?) {
+    val previous = currentPackage
+    currentPackage = newPackage
+
+    if (previous != null && previous !in SYSTEM_PACKAGE_BLACKLIST) {
+        sessionRepository.closeSession(previous)
+    }
+
+    if (newPackage == null || newPackage in SYSTEM_PACKAGE_BLACKLIST) return
+
+    val decision = evaluateBlockingStateUseCase(newPackage)
+    when (decision) {
+        is BlockingDecision.Block -> block(decision)
+        is BlockingDecision.Allow -> sessionRepository.openSession(newPackage)
+    }
+}
+```
+
+When a block decision is made, a debounce guard prevents the overlay from flashing repeatedly for the same app within a short window:
+
+```kotlin
+private fun block(decision: BlockingDecision.Block) {
+    val now = System.currentTimeMillis()
+    val samePackageRecentlyBlocked =
+        decision.packageName == lastBlockedPackage &&
+            now - lastBlockShownAtMs < BLOCK_OVERLAY_DEBOUNCE_MS
+
+    if (samePackageRecentlyBlocked) return
+
+    lastBlockedPackage = decision.packageName
+    lastBlockShownAtMs = now
+
+    startActivity(
+        Intent(this, OverlayActivity::class.java).apply {
+            putExtra("blockType", BlockType.Apps)
+            putExtra(OverlayActivity.EXTRA_RETURN_TO_PACKAGE, decision.packageName)
+            flags = Intent.FLAG_ACTIVITY_NEW_TASK
+        }
+    )
+}
+```
+
+---
+
+## The Accessibility Engine: Intercepting YouTube Shorts
+
+For content-level interception (e.g., blocking YouTube Shorts but allowing regular videos), we use the Android Accessibility Service. The service inspects the screen's view hierarchy for specific node signatures:
+
+```kotlin
+class ContentInterceptionService : AccessibilityService() {
+
+    override fun onAccessibilityEvent(event: AccessibilityEvent) {
+        if (event.packageName != TARGET_PACKAGE) return
+        if (event.eventType !in INTERCEPTABLE_EVENT_TYPES) return
+
+        val rootNode = rootInActiveWindow ?: return
+        val isTargetContent = contentDetector.detect(rootNode)
+        rootNode.recycle() // Critical: always recycle to avoid memory leaks
+
+        if (isTargetContent) {
+            showBlockingOverlay()
+        }
+    }
+}
+```
+
+> **Performance critical**: Every call to `rootInActiveWindow` creates a snapshot of the view tree. Failing to call `recycle()` on it will leak native memory. We filter event types aggressively before accessing the view tree to minimize this overhead.
+
+---
+
+## Clean Architecture Module Structure
+
+The service was refactored from a 1,000+ line monolith into a modular Clean Architecture structure:
+
+```
+:feature:protection
+  data/
+    AppForegroundRepositoryImpl.kt   ← UsageEvents polling
+    BlockListRepositoryImpl.kt       ← Room database
+  domain/
+    EvaluateBlockingStateUseCase.kt  ← Pure business logic
+    SessionTrackingManager.kt        ← Lifecycle-aware coordinator
+  presentation/
+    AppMonitorService.kt             ← LifecycleService entry point
+    OverlayActivity.kt               ← Block screen UI
+
+:feature:statistics
+  — Usage analytics, Dead Click tracking, Time Saved dashboards
+
+:core:database
+  — Room entities, DAOs, migrations
+```
+
+This separation reduced battery consumption significantly, because each module now runs only the coroutines it owns. The monolith was launching all coroutines from the service — even coroutines for statistics that had nothing to do with the blocking engine.
+
+---
+
+## Results
+
+- **Battery**: Zero battery optimization triggers after modularization. The adaptive polling strategy (UsageEvents + fallback) eliminates the fixed-cost `queryUsageStats` call.
+- **Reliability**: Fallback chain (UsageEvents → daily stats → accessibility signal) provides correct foreground detection on 95%+ of tested devices including MIUI, OneUI, and ColorOS.
+- **Privacy**: 100% on-device. No user data is transmitted to any server.
+- **Play Store**: Published to Google Play with the blocking engine fully intact.
+
+---
+
+## FAQ
+
+**Q: Why not use `ActivityManager.getRunningAppProcesses()`?**
+Since Android 5.1 (API 22), this API only returns your own app's processes when called from a non-system app. It cannot detect foreground apps.
+
+**Q: Does this work on Android 14?**
+Yes. The `UsageEvents` API remains supported. However, Android 14 tightened restrictions around `SCHEDULE_EXACT_ALARM` and foreground service types. We declare `foregroundServiceType="specialUse"` with a full justification for Google's review.
+
+**Q: How do you handle the case where the Accessibility Service is killed by the OS?**
+We implement a restart broadcast receiver and use `WorkManager` with `setExpedited()` to restart the service. On MIUI, we also guide users through the autostart permission screen.
+
+**Q: What is the `BLOCK_OVERLAY_DEBOUNCE_MS` value?**
+500ms. This prevents the overlay from flashing multiple times if the foreground package bounces (e.g., due to a system animation) within half a second.

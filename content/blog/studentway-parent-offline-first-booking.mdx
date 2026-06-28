@@ -1,0 +1,306 @@
+---
+title: "Offline-First Sync, Shared Student Cache, and Paging in StudentWay Parent App"
+description: "Designing a robust offline-first architecture for a school bus booking app: Room as single source of truth, Paging 3 with RemoteMediator, shared student database cache across features, and Ktor safety wrappers for unreliable network environments."
+date: "2026-02-15"
+lastModified: "2026-06-28"
+category: "Architecture"
+tags:
+  - "Offline First"
+  - "Room Database"
+  - "Paging 3"
+  - "Kotlin"
+  - "Android"
+  - "Ktor"
+  - "Clean Architecture"
+  - "Flow"
+readTime: "8 min read"
+featured: false
+author:
+  name: "Abdelrahman Nasr"
+  role: "Senior Android Developer & Team Lead"
+  url: "https://abdelrahmanmahmoud262.github.io/about"
+relatedArticles:
+  - "schoolie-white-label-gradle-automation"
+  - "taxi-alwatani-clean-architecture-refactor"
+relatedProjects:
+  - "taxi-alwatani"
+seo:
+  keywords:
+    - "Android offline first architecture"
+    - "Room database Android tutorial"
+    - "Paging 3 RemoteMediator Android"
+    - "Android shared database cache"
+    - "offline first Android Kotlin"
+    - "Android booking app architecture"
+    - "Room Paging 3 integration"
+---
+
+## Summary
+
+The StudentWay Parent application allows parents to manage their children's school bus bookings, track routes in real-time, and view payment history. Parents in Egypt and the UAE frequently operate in mixed-connectivity environments — fast 4G in the city, weak 2G at school pickup points, and full offline in underground transit. Building a booking app that degrades gracefully to offline mode isn't optional — it's a core product requirement.
+
+This article details the offline-first architecture: a Room-based single source of truth, a shared student cache consumed across feature modules, Paging 3 with `RemoteMediator` for paginated transport catalogs, and Ktor network wrappers that handle retries and timeouts safely.
+
+---
+
+## The Offline-First Principle
+
+Offline-first does not mean "show stale data when offline." It means:
+
+1. **Writes are local-first** — all user actions are committed to the local database immediately, then synced to the server in the background
+2. **Reads are database-first** — the UI observes Room `Flow` collections, never the network response directly
+3. **The network is a background synchronization mechanism**, not the primary data source
+
+This pattern, popularized by the Android architecture team's [offline-first guide](https://developer.android.com/topic/architecture/data-layer/offline-first), ensures a consistently fast, responsive UI regardless of network state.
+
+---
+
+## Shared Student Cache: The Core Database Module
+
+StudentWay has multiple feature modules that all need student data: `:feature:transportation`, `:feature:wallet`, `:feature:notifications`. Rather than each module maintaining its own network call for student information, we designed a shared `:core:database` module containing a single `StudentDao` and a `SyncManager` responsible for keeping the cache fresh.
+
+```kotlin
+// core/database/src/main/kotlin/dao/StudentDao.kt
+@Dao
+interface StudentDao {
+
+    @Query("SELECT * FROM students WHERE parentId = :parentId ORDER BY name ASC")
+    fun observeStudents(parentId: String): Flow<List<StudentEntity>>
+
+    @Query("SELECT * FROM students WHERE id = :studentId")
+    suspend fun getStudentById(studentId: String): StudentEntity?
+
+    @Upsert
+    suspend fun saveStudents(students: List<StudentEntity>)
+
+    @Query("DELETE FROM students WHERE parentId = :parentId")
+    suspend fun clearStudentsForParent(parentId: String)
+}
+```
+
+The `@Upsert` annotation (available since Room 2.5) is critical here — it performs an INSERT if the row doesn't exist, or an UPDATE if it does, based on the primary key. This means the sync operation is idempotent: running it multiple times produces the same result.
+
+Every feature module that needs student data injects `StudentRepository` from `:core:database` — they never make their own API calls for student information. This single cache is the **only** source of truth for student data across the entire app.
+
+---
+
+## The Sync Manager
+
+`SyncManager` is a repository that coordinates background synchronization. It's triggered on app launch, on network reconnection, and by `WorkManager` for periodic background refreshes:
+
+```kotlin
+class SyncManagerImpl @Inject constructor(
+    private val studentRemoteDataSource: StudentRemoteDataSource,
+    private val studentDao: StudentDao,
+    @IoDispatcher private val dispatcher: CoroutineDispatcher,
+) : SyncManager {
+
+    override suspend fun syncStudentsForParent(parentId: String): Result<Unit> =
+        withContext(dispatcher) {
+            runCatching {
+                val remoteStudents = studentRemoteDataSource.fetchStudents(parentId)
+                val entities = remoteStudents.map(StudentDto::toEntity)
+                studentDao.saveStudents(entities)
+            }
+        }
+}
+```
+
+`runCatching` wraps the entire operation — if the network call fails, `Result.failure()` is returned without crashing. The local database retains the last successful sync, so the UI continues to work with the cached data.
+
+---
+
+## Ktor Safety Wrappers
+
+Raw Ktor calls can throw `HttpRequestTimeoutException`, `IOException`, and various network exceptions depending on connectivity state. Spreading try-catch blocks across all repository implementations is brittle. Instead, we created a centralized `safeApiCall` wrapper:
+
+```kotlin
+// core/network/src/main/kotlin/SafeApiCall.kt
+suspend inline fun <reified T> HttpClient.safeGet(
+    urlString: String,
+    crossinline block: HttpRequestBuilder.() -> Unit = {}
+): Result<T> = runCatching {
+    get(urlString) {
+        block()
+        timeout {
+            requestTimeoutMillis = 10_000
+            connectTimeoutMillis = 5_000
+        }
+    }.body<T>()
+}.mapFailure { exception ->
+    when (exception) {
+        is HttpRequestTimeoutException -> NetworkError.Timeout
+        is ConnectTimeoutException -> NetworkError.NoConnection
+        is ResponseException -> NetworkError.ServerError(exception.response.status.value)
+        else -> NetworkError.Unknown(exception.message)
+    }
+}
+```
+
+Repository implementations use this wrapper instead of raw `httpClient.get()`:
+
+```kotlin
+class TransportationRemoteDataSource @Inject constructor(
+    private val httpClient: HttpClient
+) {
+    suspend fun fetchTransportRoutes(studentId: String): Result<List<RouteDto>> =
+        httpClient.safeGet("/transportation/routes/$studentId")
+}
+```
+
+Errors are now typed (`NetworkError` sealed class) rather than raw exceptions, making error handling in the UI layer explicit and exhaustive.
+
+---
+
+## Paging 3 with RemoteMediator
+
+Transportation history catalogs can contain hundreds of records. Loading them all at once would be slow and memory-intensive. We use **Paging 3's `RemoteMediator`** to implement the network+database paging pattern: the database is the primary data source, and the `RemoteMediator` fetches additional pages from the network when the user scrolls near the end.
+
+```kotlin
+@OptIn(ExperimentalPagingApi::class)
+class TransportationRemoteMediator(
+    private val studentId: String,
+    private val database: StudentWayDatabase,
+    private val networkApi: TransportationRemoteDataSource,
+) : RemoteMediator<Int, TransportationEntity>() {
+
+    override suspend fun load(
+        loadType: LoadType,
+        state: PagingState<Int, TransportationEntity>
+    ): MediatorResult {
+        val page = when (loadType) {
+            LoadType.REFRESH -> 1
+            LoadType.PREPEND -> return MediatorResult.Success(endOfPaginationReached = true)
+            LoadType.APPEND -> {
+                val lastPage = state.lastItemOrNull()?.page
+                    ?: return MediatorResult.Success(endOfPaginationReached = false)
+                lastPage + 1
+            }
+        }
+
+        return try {
+            val response = networkApi.fetchTransportationHistory(
+                studentId = studentId,
+                page = page,
+                pageSize = state.config.pageSize
+            ).getOrThrow()
+
+            database.withTransaction {
+                if (loadType == LoadType.REFRESH) {
+                    database.transportationDao().clearForStudent(studentId)
+                }
+                val entities = response.records.map { it.toEntity(page) }
+                database.transportationDao().insertAll(entities)
+            }
+
+            MediatorResult.Success(endOfPaginationReached = response.records.isEmpty())
+        } catch (e: Exception) {
+            MediatorResult.Error(e)
+        }
+    }
+}
+```
+
+The `Pager` is created in the repository and exposed as a `Flow<PagingData<Transportation>>`:
+
+```kotlin
+val pager = Pager(
+    config = PagingConfig(
+        pageSize = 20,
+        prefetchDistance = 5,
+        enablePlaceholders = false,
+    ),
+    remoteMediator = TransportationRemoteMediator(
+        studentId = studentId,
+        database = database,
+        networkApi = networkApi,
+    ),
+) {
+    database.transportationDao().getPagedTransportSource(studentId)
+}.flow.map { pagingData ->
+    pagingData.map(TransportationEntity::toDomain)
+}
+```
+
+The UI observes this `Flow<PagingData<Transportation>>` via `collectAsLazyPagingItems()` in Jetpack Compose, which handles loading indicators and error retries automatically.
+
+---
+
+## Handling Offline Writes: Bus Booking
+
+When a parent books a bus seat for their child, the booking must succeed locally even without connectivity:
+
+```kotlin
+class BookingRepositoryImpl @Inject constructor(
+    private val bookingDao: BookingDao,
+    private val bookingRemoteDataSource: BookingRemoteDataSource,
+    private val syncScheduler: SyncScheduler,
+) : BookingRepository {
+
+    override suspend fun bookSeat(request: BookingRequest): Result<Unit> = withContext(Dispatchers.IO) {
+        runCatching {
+            // Always write locally first
+            val entity = request.toEntity(status = BookingStatus.PENDING_SYNC)
+            bookingDao.insert(entity)
+
+            // Attempt immediate network sync
+            val networkResult = bookingRemoteDataSource.submitBooking(request)
+
+            if (networkResult.isSuccess) {
+                bookingDao.updateStatus(entity.id, BookingStatus.CONFIRMED)
+            } else {
+                // Schedule background sync for when connectivity returns
+                syncScheduler.scheduleBookingSync(entity.id)
+            }
+        }
+    }
+}
+```
+
+The booking appears immediately in the parent's booking list with a "Pending Sync" indicator. `WorkManager` handles the background sync when connectivity is restored — with retry logic that handles transient failures:
+
+```kotlin
+class BookingSyncWorker @AssistedInject constructor(
+    @Assisted context: Context,
+    @Assisted params: WorkerParameters,
+    private val bookingRepository: BookingRepository,
+) : CoroutineWorker(context, params) {
+
+    override suspend fun doWork(): Result {
+        val bookingId = inputData.getString("bookingId") ?: return Result.failure()
+
+        return when (val result = bookingRepository.syncPendingBooking(bookingId)) {
+            is kotlin.Result.Success -> Result.success()
+            is kotlin.Result.Failure -> {
+                if (runAttemptCount < 3) Result.retry() else Result.failure()
+            }
+        }
+    }
+}
+```
+
+---
+
+## Results
+
+- App works fully offline for browsing routes, viewing bookings, and managing students
+- Booking flow is instant locally — no spinner while waiting for network
+- Paged transportation history loads smoothly with automatic prefetching
+- Zero data loss on network interruption — pending bookings sync automatically when connectivity returns
+- Room database queries via `Flow` ensure the UI is always showing the most up-to-date local data with zero polling
+
+---
+
+## FAQ
+
+**Q: What happens if the server rejects a booking that was accepted locally?**
+The `SyncWorker` receives the error response and updates the booking status to `SYNC_FAILED`. The parent sees an error indicator on the booking and a prompt to retry or cancel. We never silently discard the error.
+
+**Q: How do you prevent the local database from growing unbounded?**
+We run a scheduled cleanup `WorkManager` task weekly that deletes transportation records older than 90 days and bookings older than 1 year.
+
+**Q: Why Paging 3 instead of manual pagination?**
+Paging 3 handles all edge cases: empty pages, error states, retry logic, and prepend/append loading states. Reimplementing this manually would require significant effort and is error-prone. The integration with Compose via `collectAsLazyPagingItems()` is also seamless.
+
+**Q: How does the `SyncManager` know when connectivity is restored?**
+We observe `ConnectivityManager.registerNetworkCallback()` wrapped in a `Flow`. When a network becomes available, we trigger a sync for any `PENDING_SYNC` records in the database.

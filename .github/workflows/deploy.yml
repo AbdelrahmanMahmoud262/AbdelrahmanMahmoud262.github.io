@@ -34,6 +34,7 @@ jobs:
 
       - name: Build Next.js Site
         env:
+          DEPLOY_TARGET: github-pages
           NEXT_PUBLIC_GA_ID: ${{ secrets.NEXT_PUBLIC_GA_ID }}
           NEXT_PUBLIC_FORM_ENDPOINT: ${{ secrets.NEXT_PUBLIC_FORM_ENDPOINT }}
         run: npm run build

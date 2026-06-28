@@ -1,6 +1,22 @@
 import React from "react";
 import Link from "next/link";
+import type { Metadata } from "next";
 import { ShieldCheck, ArrowLeft } from "lucide-react";
+import { createMetadata } from "@/lib/seo/metadata";
+
+export const metadata: Metadata = createMetadata({
+  title: "Privacy Policy & On-Device Assurances",
+  description:
+    "Privacy guidelines and on-device data assurances for Rafiqy (formerly Mostaqeem) app and services by Abdelrahman Nasr. Privacy-by-design policy.",
+  keywords: [
+    "privacy policy Rafiqy",
+    "on-device data assurance",
+    "accessibility service privacy",
+    "data retention policy",
+  ],
+  path: "/privacy",
+  ogImage: "/og/home.png",
+});
 
 export default function Privacy() {
   return (

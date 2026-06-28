@@ -1,5 +1,23 @@
+import type { Metadata } from "next";
 import { BookOpen, Award, Globe } from "lucide-react";
 import { TECHNICAL_SKILLS } from "@/constants";
+import { createMetadata } from "@/lib/seo/metadata";
+import { JsonLd } from "@/components/JsonLd";
+import { profilePageSchema } from "@/lib/seo/jsonld";
+
+export const metadata: Metadata = createMetadata({
+  title: "About — Android Architect & Team Lead",
+  description:
+    "Learn about Abdelrahman Nasr — 6+ years of Android development experience, CS50 Harvard certified, Team Lead at Almyaar. Specializing in Kotlin, Jetpack Compose, and Clean Architecture. Based in Cairo, Egypt.",
+  keywords: [
+    "Android developer biography",
+    "Android engineer Egypt",
+    "CS50 certified Android developer",
+    "Kotlin expert Cairo",
+  ],
+  path: "/about",
+  ogImage: "/og/about.png",
+});
 
 const PROFESSIONAL_READINGS = [
   {
@@ -46,10 +64,12 @@ const LANGS = [
 export default function About() {
   return (
     <div className="w-full max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-24 md:py-32 flex flex-col gap-16">
+      <JsonLd data={profilePageSchema()} />
       {/* Page Header */}
       <div className="flex flex-col gap-4 max-w-3xl">
         <p className="text-xs font-mono text-accent-android uppercase tracking-wider font-extrabold select-none">
           {"// TEAM LEAD & MOBILE SYSTEMS ARCHITECT"}
+
         </p>
         <h1 className="text-4xl sm:text-5xl lg:text-6xl font-black text-white tracking-tighter uppercase leading-none">
           About Abdelrahman Nasr

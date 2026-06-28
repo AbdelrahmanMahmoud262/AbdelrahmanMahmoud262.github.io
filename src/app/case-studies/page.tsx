@@ -1,7 +1,24 @@
 import React from "react";
 import Link from "next/link";
+import type { Metadata } from "next";
 import { ArrowRight } from "lucide-react";
 import { CASE_STUDIES } from "@/constants";
+import { createMetadata } from "@/lib/seo/metadata";
+
+export const metadata: Metadata = createMetadata({
+  title: "Technical Case Studies — Production Android Projects",
+  description:
+    "In-depth case studies of production Android projects: Taxi Alwatani ride-hailing platform (30K+ users, Iraq), Schoolie white-label education app (40+ institutions), and Rafiqy digital wellness platform.",
+  keywords: [
+    "Android case studies",
+    "Android portfolio projects",
+    "ride-hailing app Android",
+    "white-label Android app",
+    "Android architecture portfolio",
+  ],
+  path: "/case-studies",
+  ogImage: "/og/case-studies.png",
+});
 
 export default function CaseStudies() {
   return (
