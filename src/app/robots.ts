@@ -10,8 +10,7 @@ export default function robots(): MetadataRoute.Robots {
     rules: [
       {
         userAgent: "*",
-        allow: "/",
-        disallow: "/api/",
+        disallow: ["/api/", "/proposal", "/proposal/"],
       },
       {
         userAgent: ["GPTBot", "Claude-Web", "cohere-ai", "OMgili"],
