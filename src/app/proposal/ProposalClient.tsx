@@ -30,7 +30,7 @@ import {
   Key
 } from "lucide-react";
 import { Github, Linkedin } from "@/components/Icons";
-import { PROPOSAL_DATA } from "@/constants/proposalData";
+import { PROPOSAL_DATA, ProposalContent } from "@/constants/proposalData";
 
 const SECTIONS = [
   { id: "cover", label: "Cover" },
@@ -46,7 +46,9 @@ const SECTIONS = [
   { id: "terms", label: "Terms & Conditions" }
 ];
 
-export default function ProposalClient() {
+export default function ProposalClient({ data = PROPOSAL_DATA }: { data?: ProposalContent }) {
+  const proposalData = data;
+  const storageKey = `proposal_unlocked_${proposalData.meta.passcode}`;
   const [passcode, setPasscode] = useState("");
   const [isUnlocked, setIsUnlocked] = useState(false);
   const [errorMsg, setErrorMsg] = useState("");
@@ -57,20 +59,20 @@ export default function ProposalClient() {
   // Load unlock state from sessionStorage to persist during session
   useEffect(() => {
     if (typeof window !== "undefined") {
-      const unlocked = sessionStorage.getItem("proposal_unlocked");
+      const unlocked = sessionStorage.getItem(storageKey);
       if (unlocked === "true") {
         setIsUnlocked(true);
       }
     }
-  }, []);
+  }, [storageKey]);
 
   const handleUnlock = (e: React.FormEvent) => {
     e.preventDefault();
-    if (passcode === PROPOSAL_DATA.meta.passcode) {
+    if (passcode === proposalData.meta.passcode) {
       setIsUnlocked(true);
       setErrorMsg("");
       if (typeof window !== "undefined") {
-        sessionStorage.setItem("proposal_unlocked", "true");
+        sessionStorage.setItem(storageKey, "true");
       }
     } else {
       setErrorMsg("Invalid access key. Please try again.");
@@ -276,7 +278,7 @@ export default function ProposalClient() {
 
         <button
           onClick={() => {
-            sessionStorage.removeItem("proposal_unlocked");
+            sessionStorage.removeItem(storageKey);
             setIsUnlocked(false);
           }}
           className="text-zinc-500 hover:text-red-400 text-[10px] font-mono text-center pt-2 transition-all cursor-pointer"
@@ -314,7 +316,7 @@ export default function ProposalClient() {
                 {"// CLASSED SYSTEMS ENGINEER"}
               </span>
               <h3 className={`text-xs font-mono font-bold ${printMode === "dark" ? "text-[#00e5ff]" : "text-cyan-700"}`}>
-                {PROPOSAL_DATA.contact.name.toUpperCase()}
+                {proposalData.contact.name.toUpperCase()}
               </h3>
             </div>
             <div className={`px-2.5 py-1 rounded border text-[9px] font-mono ${
@@ -333,19 +335,19 @@ export default function ProposalClient() {
                 <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-cyan-400 opacity-75"></span>
                 <span className="relative inline-flex rounded-full h-1.5 w-1.5 bg-[#00e5ff]"></span>
               </span>
-              <span>{"PROJECT_PROPOSAL // "}{PROPOSAL_DATA.meta.version}</span>
+              <span>{"PROJECT_PROPOSAL // "}{proposalData.meta.version}</span>
             </div>
 
             <div className="space-y-2">
               <h1 className={`text-5xl sm:text-6xl lg:text-7xl font-black tracking-tight leading-[1.05] uppercase ${
                 printMode === "dark" ? "text-white" : "text-black"
               }`}>
-                {PROPOSAL_DATA.meta.title}
+                {proposalData.meta.title}
               </h1>
               <p className={`text-lg sm:text-xl font-mono tracking-wide ${
                 printMode === "dark" ? "text-[#00e5ff]" : "text-cyan-700"
               }`}>
-                {PROPOSAL_DATA.meta.subtitle}
+                {proposalData.meta.subtitle}
               </p>
             </div>
             
@@ -370,10 +372,10 @@ export default function ProposalClient() {
                 PREPARED FOR:
               </span>
               <span className={`text-sm font-bold block ${printMode === "dark" ? "text-zinc-200" : "text-black"}`}>
-                {PROPOSAL_DATA.meta.client.name}
+                {proposalData.meta.client.name}
               </span>
               <span className="text-xs font-mono block text-zinc-500">
-                {PROPOSAL_DATA.meta.client.company}
+                {proposalData.meta.client.company}
               </span>
             </div>
 
@@ -382,10 +384,10 @@ export default function ProposalClient() {
                 ISSUED BY:
               </span>
               <span className={`text-sm font-bold block ${printMode === "dark" ? "text-zinc-200" : "text-black"}`}>
-                {PROPOSAL_DATA.contact.name}
+                {proposalData.contact.name}
               </span>
               <span className="text-xs font-mono block text-zinc-500">
-                {PROPOSAL_DATA.contact.role}
+                {proposalData.contact.role}
               </span>
             </div>
 
@@ -394,7 +396,7 @@ export default function ProposalClient() {
                 DATE OF ISSUANCE:
               </span>
               <span className={`text-sm font-mono block ${printMode === "dark" ? "text-zinc-200" : "text-black"}`}>
-                {PROPOSAL_DATA.meta.date}
+                {proposalData.meta.date}
               </span>
               <span className="text-[10px] font-mono block text-zinc-500">
                 VALID FOR 30 DAYS
@@ -407,19 +409,19 @@ export default function ProposalClient() {
             <div className="flex gap-4 text-xs font-mono text-zinc-500">
               <span className="flex items-center gap-1">
                 <MapPin className="w-3.5 h-3.5 text-[#00e5ff]" />
-                {PROPOSAL_DATA.contact.location}
+                {proposalData.contact.location}
               </span>
               <span className="flex items-center gap-1">
                 <Mail className="w-3.5 h-3.5 text-[#00e5ff]" />
-                {PROPOSAL_DATA.contact.email}
+                {proposalData.contact.email}
               </span>
             </div>
             
             <div className="flex gap-4 text-zinc-400">
-              <Link href={PROPOSAL_DATA.contact.linkedin} target="_blank" className="hover:text-white transition-colors">
+              <Link href={proposalData.contact.linkedin} target="_blank" className="hover:text-white transition-colors">
                 <Linkedin className="w-4 h-4" />
               </Link>
-              <Link href={PROPOSAL_DATA.contact.github} target="_blank" className="hover:text-white transition-colors">
+              <Link href={proposalData.contact.github} target="_blank" className="hover:text-white transition-colors">
                 <Github className="w-4 h-4" />
               </Link>
             </div>
@@ -506,7 +508,7 @@ export default function ProposalClient() {
             }`}>
               <div className={`absolute top-3 left-3 w-1.5 h-1.5 rounded-full ${printMode === "dark" ? "bg-[#00e5ff]" : "bg-cyan-600"}`}></div>
               <p className={`text-base leading-relaxed ${printMode === "dark" ? "text-zinc-200" : "text-gray-800"}`}>
-                {PROPOSAL_DATA.overview}
+                {proposalData.overview}
               </p>
             </div>
 
@@ -516,7 +518,7 @@ export default function ProposalClient() {
                 Core Project Goals & Expected Outcomes:
               </h4>
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                {PROPOSAL_DATA.goals.map((goal, i) => (
+                {proposalData.goals.map((goal, i) => (
                   <div key={i} className={`flex items-start gap-3 p-4 rounded border text-xs ${
                     printMode === "dark" 
                       ? "bg-zinc-900/20 border-zinc-850 text-zinc-300" 
@@ -572,17 +574,17 @@ export default function ProposalClient() {
                 
                 <div>
                   <h3 className={`text-sm font-extrabold uppercase tracking-tight ${printMode === "dark" ? "text-zinc-150" : "text-black"}`}>
-                    {PROPOSAL_DATA.contact.name}
+                    {proposalData.contact.name}
                   </h3>
                   <span className="text-[10px] font-mono text-zinc-500 uppercase tracking-widest block">
-                    {PROPOSAL_DATA.contact.role}
+                    {proposalData.contact.role}
                   </span>
                   <span className={`inline-block px-2.5 py-0.5 rounded text-[9px] font-mono font-bold mt-2 uppercase ${
                     printMode === "dark" 
                       ? "bg-[#00e5ff]/10 text-[#00e5ff] border border-[#00e5ff]/20" 
                       : "bg-cyan-50 text-cyan-800 border border-cyan-200"
                   }`}>
-                    {PROPOSAL_DATA.aboutMe.experienceYears} EXP
+                    {proposalData.aboutMe.experienceYears} EXP
                   </span>
                 </div>
               </div>
@@ -594,7 +596,7 @@ export default function ProposalClient() {
                     Biography & Experience
                   </h4>
                   <p className={`text-sm leading-relaxed ${printMode === "dark" ? "text-zinc-300" : "text-gray-800"}`}>
-                    {PROPOSAL_DATA.aboutMe.bio}
+                    {proposalData.aboutMe.bio}
                   </p>
                 </div>
 
@@ -603,7 +605,7 @@ export default function ProposalClient() {
                     Engineering Philosophy
                   </h4>
                   <p className={`text-sm leading-relaxed italic ${printMode === "dark" ? "text-zinc-400" : "text-gray-700"}`}>
-                    &ldquo;{PROPOSAL_DATA.aboutMe.philosophy}&rdquo;
+                    &ldquo;{proposalData.aboutMe.philosophy}&rdquo;
                   </p>
                 </div>
 
@@ -620,7 +622,7 @@ export default function ProposalClient() {
                     <ul className={`list-disc list-inside text-xs space-y-1.5 pt-2 ${
                       printMode === "dark" ? "text-zinc-300" : "text-gray-700"
                     }`}>
-                      {PROPOSAL_DATA.aboutMe.coreExpertise.slice(0, 3).map((exp, i) => (
+                      {proposalData.aboutMe.coreExpertise.slice(0, 3).map((exp, i) => (
                         <li key={i}>{exp}</li>
                       ))}
                     </ul>
@@ -637,7 +639,7 @@ export default function ProposalClient() {
                     <ul className={`list-disc list-inside text-xs space-y-1.5 pt-2 ${
                       printMode === "dark" ? "text-zinc-300" : "text-gray-700"
                     }`}>
-                      {PROPOSAL_DATA.aboutMe.industries.map((ind, i) => (
+                      {proposalData.aboutMe.industries.map((ind, i) => (
                         <li key={i}>{ind}</li>
                       ))}
                     </ul>
@@ -670,7 +672,7 @@ export default function ProposalClient() {
 
             {/* Understanding Cards Grid */}
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-              {Object.entries(PROPOSAL_DATA.understanding).map(([key, item]) => (
+              {Object.entries(proposalData.understanding).map(([key, item]) => (
                 <div
                   key={key}
                   className={`p-6 rounded border flex gap-4 items-start ${
@@ -760,7 +762,7 @@ export default function ProposalClient() {
 
             {/* Architecture grid */}
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-              {Object.entries(PROPOSAL_DATA.solution).map(([key, item]) => (
+              {Object.entries(proposalData.solution).map(([key, item]) => (
                 <div
                   key={key}
                   className={`p-5 rounded border flex flex-col gap-3 justify-between ${
@@ -801,7 +803,7 @@ export default function ProposalClient() {
                 Proposed Stack Badge Breakdown:
               </h4>
               <div className="grid grid-cols-1 md:grid-cols-2 gap-6 pt-4">
-                {PROPOSAL_DATA.techStack.map((tech, i) => (
+                {proposalData.techStack.map((tech, i) => (
                   <div key={i} className="flex flex-col gap-2">
                     <span className={`text-[10px] font-mono font-bold uppercase tracking-wide ${
                       printMode === "dark" ? "text-white" : "text-black"
@@ -851,7 +853,7 @@ export default function ProposalClient() {
 
             {/* Horizontal Timeline (Scrollable on web, stacks cleanly on print) */}
             <div className="flex flex-col md:flex-row gap-6 overflow-x-auto pb-4 md:scroll-smooth print:flex-col print:overflow-x-visible">
-              {PROPOSAL_DATA.process.map((step, i) => (
+              {proposalData.process.map((step, i) => (
                 <div
                   key={i}
                   className={`p-5 rounded border relative flex-1 min-w-[240px] flex flex-col justify-between shrink-0 print:min-w-0 print:border-l-2 print:border-t-0 print:border-r-0 print:border-b-0 print:pl-6 print:rounded-none ${
@@ -939,7 +941,7 @@ export default function ProposalClient() {
                 </div>
 
                 <ul className="space-y-3">
-                  {PROPOSAL_DATA.scope.included.map((inc, i) => (
+                  {proposalData.scope.included.map((inc, i) => (
                     <li key={i} className="flex gap-2.5 items-start text-xs leading-relaxed">
                       <Check className={`w-3.5 h-3.5 shrink-0 mt-0.5 ${
                         printMode === "dark" ? "text-[#00e5ff]" : "text-emerald-700"
@@ -970,7 +972,7 @@ export default function ProposalClient() {
                 </div>
 
                 <ul className="space-y-3">
-                  {PROPOSAL_DATA.scope.excluded.map((exc, i) => (
+                  {proposalData.scope.excluded.map((exc, i) => (
                     <li key={i} className="flex gap-2.5 items-start text-xs leading-relaxed">
                       <X className={`w-3.5 h-3.5 shrink-0 mt-0.5 ${
                         printMode === "dark" ? "text-amber-500" : "text-red-700"
@@ -988,7 +990,7 @@ export default function ProposalClient() {
                 Concrete Project Deliverables:
               </h4>
               <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
-                {PROPOSAL_DATA.deliverables.map((deliv, i) => (
+                {proposalData.deliverables.map((deliv, i) => (
                   <div
                     key={i}
                     className={`p-4 rounded border flex flex-col gap-2 ${
@@ -1041,7 +1043,7 @@ export default function ProposalClient() {
 
             {/* Milestones timeline chart details */}
             <div className="space-y-6">
-              {PROPOSAL_DATA.timeline.map((miles, i) => (
+              {proposalData.timeline.map((miles, i) => (
                 <div
                   key={i}
                   className={`p-5 rounded border flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 no-page-break ${
@@ -1146,7 +1148,7 @@ export default function ProposalClient() {
                 <h3 className={`text-4xl sm:text-5xl font-black tracking-tight uppercase leading-none ${
                   printMode === "dark" ? "text-[#00e5ff]" : "text-cyan-700"
                 }`}>
-                  {PROPOSAL_DATA.pricing.totalCost} <span className="text-lg font-mono">{PROPOSAL_DATA.pricing.baseCurrency}</span>
+                  {proposalData.pricing.totalCost} <span className="text-lg font-mono">{proposalData.pricing.baseCurrency}</span>
                 </h3>
                 <p className={`text-xs ${printMode === "dark" ? "text-zinc-450" : "text-gray-600"}`}>
                   Complete end-to-end development, deployment, and 30-day warranty coverage.
@@ -1155,12 +1157,12 @@ export default function ProposalClient() {
 
               {/* Cost breakdown progress list */}
               <div className="flex-grow max-w-sm w-full space-y-2 border-t md:border-t-0 md:border-l border-zinc-900 pt-4 md:pt-0 md:pl-6 text-[10px] font-mono text-zinc-400">
-                {PROPOSAL_DATA.pricing.breakdown.map((breakd, i) => (
+                {proposalData.pricing.breakdown.map((breakd, i) => (
                   <div key={i} className="space-y-1">
                     <div className="flex justify-between">
                       <span className={printMode === "dark" ? "text-zinc-400" : "text-gray-700"}>{breakd.label}</span>
                       <span className={`font-bold ${printMode === "dark" ? "text-zinc-200" : "text-black"}`}>
-                        {breakd.amount} {PROPOSAL_DATA.pricing.baseCurrency} ({breakd.percentage}%)
+                        {breakd.amount} {proposalData.pricing.baseCurrency} ({breakd.percentage}%)
                       </span>
                     </div>
                     <div className="w-full bg-zinc-900 h-1.5 rounded overflow-hidden relative border border-zinc-850">
@@ -1180,7 +1182,7 @@ export default function ProposalClient() {
                 Milestone Drawdowns:
               </h4>
               <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-                {PROPOSAL_DATA.pricing.milestones.map((mil, i) => (
+                {proposalData.pricing.milestones.map((mil, i) => (
                   <div
                     key={i}
                     className={`p-5 rounded border flex flex-col justify-between gap-3 relative ${
@@ -1207,7 +1209,7 @@ export default function ProposalClient() {
                         {mil.amount}
                       </span>
                       <span className="text-[10px] font-mono text-zinc-500 ml-1">
-                        {PROPOSAL_DATA.pricing.baseCurrency}
+                        {proposalData.pricing.baseCurrency}
                       </span>
                     </div>
 
@@ -1221,7 +1223,7 @@ export default function ProposalClient() {
 
             {/* SLA / Optional Retainers */}
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6 pt-4">
-              {PROPOSAL_DATA.pricing.maintenance.map((maint, i) => (
+              {proposalData.pricing.maintenance.map((maint, i) => (
                 <div
                   key={i}
                   className={`p-5 rounded border ${
@@ -1277,7 +1279,7 @@ export default function ProposalClient() {
 
             {/* Grid of features */}
             <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-6">
-              {PROPOSAL_DATA.whyMe.map((item, i) => (
+              {proposalData.whyMe.map((item, i) => (
                 <div
                   key={i}
                   className={`p-5 rounded border flex flex-col gap-3 ${
@@ -1330,7 +1332,7 @@ export default function ProposalClient() {
 
             {/* Collapsible Accordions (Expanded in print automatically) */}
             <div className="space-y-4">
-              {PROPOSAL_DATA.faqs.map((faq, i) => {
+              {proposalData.faqs.map((faq, i) => {
                 const isOpen = expandedFaq === i;
                 return (
                   <div
@@ -1389,7 +1391,7 @@ export default function ProposalClient() {
 
             {/* Terms list */}
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-              {PROPOSAL_DATA.terms.map((term, i) => (
+              {proposalData.terms.map((term, i) => (
                 <div
                   key={i}
                   className={`p-5 rounded border flex flex-col gap-2 no-page-break ${
@@ -1455,15 +1457,15 @@ export default function ProposalClient() {
               <div className="text-left space-y-3 font-mono text-xs text-zinc-400">
                 <div className="flex items-center gap-2">
                   <Mail className={`w-4 h-4 ${printMode === "dark" ? "text-[#00e5ff]" : "text-cyan-700"}`} />
-                  <span className={printMode === "dark" ? "text-zinc-300" : "text-black"}>{PROPOSAL_DATA.contact.email}</span>
+                  <span className={printMode === "dark" ? "text-zinc-300" : "text-black"}>{proposalData.contact.email}</span>
                 </div>
                 <div className="flex items-center gap-2">
                   <Phone className={`w-4 h-4 ${printMode === "dark" ? "text-[#00e5ff]" : "text-cyan-700"}`} />
-                  <span className={printMode === "dark" ? "text-zinc-300" : "text-black"}>{PROPOSAL_DATA.contact.phone}</span>
+                  <span className={printMode === "dark" ? "text-zinc-300" : "text-black"}>{proposalData.contact.phone}</span>
                 </div>
                 <div className="flex items-center gap-2">
                   <span className={`text-[10px] font-bold ${printMode === "dark" ? "text-[#00e5ff]" : "text-cyan-700"}`}>WWW:</span>
-                  <a href={PROPOSAL_DATA.contact.portfolio} target="_blank" className={`underline ${printMode === "dark" ? "text-zinc-300 hover:text-white" : "text-blue-700"}`}>
+                  <a href={proposalData.contact.portfolio} target="_blank" className={`underline ${printMode === "dark" ? "text-zinc-300 hover:text-white" : "text-blue-700"}`}>
                     abdelrahmanmahmoud262.github.io
                   </a>
                 </div>
